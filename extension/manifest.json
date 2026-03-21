@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "evolve(browser)",
+  "version": "1.0.0",
+  "description": "AI-powered DOM transformation engine",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"]
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "evolve(browser)"
+  }
+}
