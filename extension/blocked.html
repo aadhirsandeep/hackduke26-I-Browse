@@ -26,41 +26,51 @@
         box-shadow: 0 20px 45px rgba(2, 6, 23, 0.35);
       }
       h1 {
-        margin: 0 0 10px;
+        margin: 0;
         font-size: 28px;
       }
-      p {
-        margin: 8px 0;
-        color: #94a3b8;
-        line-height: 1.55;
+      .line {
+        margin: 0;
+        font-size: 16px;
+        color: #cbd5e1;
+        line-height: 1.5;
       }
-      .meta {
-        margin-top: 16px;
-        padding: 12px 14px;
-        border-radius: 10px;
-        background: rgba(15, 23, 42, 0.85);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-        word-break: break-word;
+      .word {
+        color: #fda4af;
+        font-weight: 700;
       }
     </style>
   </head>
   <body>
     <main class="card">
-      <h1>Can’t access this page</h1>
-      <p>This URL matched one of your restricted words.</p>
-      <div class="meta">
-        <div><strong>Flagged restricted word:</strong> <span id="word">(unknown)</span></div>
-        <div><strong>Blocked URL:</strong> <span id="url">(unknown)</span></div>
-      </div>
+      <p class="line">Can’t access this page — flagged restricted word: <span class="word" id="word">(unknown)</span></p>
     </main>
 
     <script>
-      const params = new URLSearchParams(window.location.search);
-      const matchedWord = params.get("word") || "(unknown)";
-      const blockedUrl = params.get("url") || "(unknown)";
+      const LAST_BLOCKED_KEY = "ibrowse:lastBlocked";
 
-      document.getElementById("word").textContent = matchedWord;
-      document.getElementById("url").textContent = blockedUrl;
+      async function renderBlockedWord() {
+        const params = new URLSearchParams(window.location.search);
+        const queryWord = params.get("word");
+        const queryTabId = Number(params.get("tabId"));
+
+        if (queryWord) {
+          document.getElementById("word").textContent = queryWord;
+          return;
+        }
+
+        try {
+          const result = await chrome.storage.local.get([LAST_BLOCKED_KEY]);
+          const lastBlocked = result[LAST_BLOCKED_KEY];
+          const isSameTab = Number.isFinite(queryTabId) ? Number(lastBlocked?.tabId) === queryTabId : true;
+          const fallbackWord = isSameTab ? lastBlocked?.word : null;
+          document.getElementById("word").textContent = fallbackWord || "(unknown)";
+        } catch (e) {
+          document.getElementById("word").textContent = "(unknown)";
+        }
+      }
+
+      renderBlockedWord();
     </script>
   </body>
 </html>
