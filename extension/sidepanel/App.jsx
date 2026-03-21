@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DASHBOARD_URL } from "./config.js";
 
 const PRESETS = {
   Reader: {
@@ -162,6 +163,10 @@ export default function App() {
     } catch (err) {
       setError(err.message || "Unknown error");
     }
+  };
+
+  const handleOpenDashboard = async () => {
+    await chrome.tabs.create({ url: DASHBOARD_URL });
   };
 
   const isDisabled = loading || !prompt.trim();
@@ -343,6 +348,25 @@ export default function App() {
           ) : (
             "Transform →"
           )}
+        </button>
+
+        <button
+          onClick={handleOpenDashboard}
+          style={{
+            width: "100%",
+            padding: "11px 14px",
+            border: "1px solid rgba(103,232,249,0.22)",
+            background: "rgba(103,232,249,0.08)",
+            color: "#67e8f9",
+            borderRadius: "12px",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+            letterSpacing: "0.2px",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+          }}
+        >
+          Open Dashboard
         </button>
 
         {/* Status */}

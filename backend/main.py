@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from typing import Any
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="I Browse backend")
 
@@ -16,8 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 SYSTEM_PROMPT = """You are a DOM transformation engine for a browser extension.
 Respond with ONLY a valid JSON object — no explanation, no markdown, no code fences:
@@ -38,6 +39,16 @@ Rules:
 class TransformRequest(BaseModel):
     prompt: str
     snapshot: list[dict[str, Any]]
+
+
+def get_client() -> genai.Client:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY is not set. Presets still work, but AI transforms require a Gemini API key.",
+        )
+    return genai.Client(api_key=api_key)
 
 
 def build_snapshot_text(snapshot: list[dict]) -> str:
@@ -66,6 +77,7 @@ def build_snapshot_text(snapshot: list[dict]) -> str:
 async def transform(req: TransformRequest):
     snapshot_text = build_snapshot_text(req.snapshot)
     user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
+    client = get_client()
 
     try:
         response = client.models.generate_content(
