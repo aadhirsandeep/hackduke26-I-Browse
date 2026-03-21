@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+
+const RESTRICTED_WORDS_KEY = "ibrowse:restrictedWords";
 
 const PRESETS = {
   Reader: {
@@ -106,6 +108,43 @@ export default function App() {
   const [logOpen, setLogOpen] = useState(true);
   const [activePreset, setActivePreset] = useState(null);
   const [hoveredPreset, setHoveredPreset] = useState(null);
+  const [restrictedWordsInput, setRestrictedWordsInput] = useState("");
+
+  useEffect(() => {
+    const loadRestrictedWords = async () => {
+      try {
+        const result = await chrome.storage.local.get([RESTRICTED_WORDS_KEY]);
+        const words = Array.isArray(result[RESTRICTED_WORDS_KEY]) ? result[RESTRICTED_WORDS_KEY] : [];
+        setRestrictedWordsInput(words.join(", "));
+      } catch (err) {
+        setError(err.message || "Failed to load restricted words");
+      }
+    };
+
+    loadRestrictedWords();
+  }, []);
+
+  const parseRestrictedWords = (value) => {
+    return [...new Set(
+      value
+        .split(/[\n,]/)
+        .map((word) => word.trim().toLowerCase())
+        .filter(Boolean)
+    )];
+  };
+
+  const handleSaveRestrictedWords = async () => {
+    setError("");
+    setStatus("");
+    try {
+      const words = parseRestrictedWords(restrictedWordsInput);
+      await chrome.storage.local.set({ [RESTRICTED_WORDS_KEY]: words });
+      setRestrictedWordsInput(words.join(", "));
+      setStatus(words.length ? `Saved ${words.length} restricted word(s)` : "Cleared restricted words");
+    } catch (err) {
+      setError(err.message || "Failed to save restricted words");
+    }
+  };
 
   const handleTransform = async () => {
     if (!prompt.trim()) return;
@@ -312,6 +351,50 @@ export default function App() {
             opacity: hoveredPreset ? 1 : 0,
           }}>
             {hoveredPreset ? PRESETS[hoveredPreset].demoHint : ""}
+          </div>
+        </div>
+
+        <div className="divider" />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+            Restricted Words
+          </label>
+          <textarea
+            style={{
+              width: "100%",
+              minHeight: "72px",
+              background: "rgba(15,15,30,0.8)",
+              border: "1px solid rgba(148,163,184,0.24)",
+              borderRadius: "12px",
+              color: "#e2e8f0",
+              padding: "10px 12px",
+              fontSize: "13px",
+              resize: "vertical",
+              outline: "none",
+              fontFamily: "'Space Grotesk', sans-serif",
+              lineHeight: "1.5",
+            }}
+            placeholder="e.g. facebook, reddit, instagram"
+            value={restrictedWordsInput}
+            onChange={(e) => setRestrictedWordsInput(e.target.value)}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+            <div style={{ fontSize: "11px", color: "#475569" }}>
+              Comma or newline separated. URLs containing these words are blocked.
+            </div>
+            <button
+              className="transform-btn"
+              onClick={handleSaveRestrictedWords}
+              style={{
+                width: "auto",
+                minWidth: "92px",
+                padding: "8px 12px",
+                fontSize: "12px",
+              }}
+            >
+              Save
+            </button>
           </div>
         </div>
 

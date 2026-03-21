@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Blocked</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0b1020;
+        color: #e2e8f0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      .card {
+        width: min(560px, calc(100vw - 32px));
+        padding: 28px;
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        box-shadow: 0 20px 45px rgba(2, 6, 23, 0.35);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+      }
+      p {
+        margin: 8px 0;
+        color: #94a3b8;
+        line-height: 1.55;
+      }
+      .meta {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        word-break: break-word;
+      }
+      .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(30, 41, 59, 0.9);
+        color: #e2e8f0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: rgba(51, 65, 85, 0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Can’t access this page</h1>
+      <p>This URL matched one of your restricted words.</p>
+      <div class="meta">
+        <div><strong>Matched word:</strong> <span id="word">(unknown)</span></div>
+        <div><strong>Blocked URL:</strong> <span id="url">(unknown)</span></div>
+      </div>
+      <div class="actions">
+        <button id="backBtn" type="button">Go back</button>
+      </div>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const matchedWord = params.get("word") || "(unknown)";
+      const blockedUrl = params.get("url") || "(unknown)";
+
+      document.getElementById("word").textContent = matchedWord;
+      document.getElementById("url").textContent = blockedUrl;
+
+      document.getElementById("backBtn").addEventListener("click", () => {
+        history.back();
+      });
+    </script>
+  </body>
+</html>
