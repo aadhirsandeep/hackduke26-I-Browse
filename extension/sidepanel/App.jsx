@@ -356,6 +356,43 @@ export default function App() {
 
         <div className="divider" />
 
+        {/* Prompt area */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+          <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+            Custom Instruction
+          </label>
+          <textarea
+            style={{
+              width: "100%",
+              minHeight: "90px",
+              background: "rgba(15,15,30,0.8)",
+              border: "1px solid rgba(139,92,246,0.2)",
+              borderRadius: "12px",
+              color: "#e2e8f0",
+              padding: "12px 14px",
+              fontSize: "14px",
+              resize: "vertical",
+              outline: "none",
+              fontFamily: "'Space Grotesk', sans-serif",
+              lineHeight: "1.6",
+              transition: "border-color 0.2s, box-shadow 0.2s",
+              backdropFilter: "blur(8px)",
+            }}
+            placeholder='e.g. "hide all MrBeast videos" or "make all text blue"'
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleTransform();
+            }}
+            disabled={loading}
+          />
+          <div style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}>
+            ⌘↵ to run
+          </div>
+        </div>
+
+        <div className="divider" />
+
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
             Restricted Words
@@ -395,43 +432,6 @@ export default function App() {
             >
               Save
             </button>
-          </div>
-        </div>
-
-        <div className="divider" />
-
-        {/* Prompt area */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-          <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
-            Custom Instruction
-          </label>
-          <textarea
-            style={{
-              width: "100%",
-              minHeight: "90px",
-              background: "rgba(15,15,30,0.8)",
-              border: "1px solid rgba(139,92,246,0.2)",
-              borderRadius: "12px",
-              color: "#e2e8f0",
-              padding: "12px 14px",
-              fontSize: "14px",
-              resize: "vertical",
-              outline: "none",
-              fontFamily: "'Space Grotesk', sans-serif",
-              lineHeight: "1.6",
-              transition: "border-color 0.2s, box-shadow 0.2s",
-              backdropFilter: "blur(8px)",
-            }}
-            placeholder='e.g. "hide all MrBeast videos" or "make all text blue"'
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleTransform();
-            }}
-            disabled={loading}
-          />
-          <div style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}>
-            ⌘↵ to run
           </div>
         </div>
 

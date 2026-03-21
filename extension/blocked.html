@@ -42,22 +42,6 @@
         border: 1px solid rgba(148, 163, 184, 0.2);
         word-break: break-word;
       }
-      .actions {
-        margin-top: 18px;
-        display: flex;
-        gap: 10px;
-      }
-      button {
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        background: rgba(30, 41, 59, 0.9);
-        color: #e2e8f0;
-        border-radius: 8px;
-        padding: 9px 12px;
-        cursor: pointer;
-      }
-      button:hover {
-        background: rgba(51, 65, 85, 0.95);
-      }
     </style>
   </head>
   <body>
@@ -65,11 +49,8 @@
       <h1>Can’t access this page</h1>
       <p>This URL matched one of your restricted words.</p>
       <div class="meta">
-        <div><strong>Matched word:</strong> <span id="word">(unknown)</span></div>
+        <div><strong>Flagged restricted word:</strong> <span id="word">(unknown)</span></div>
         <div><strong>Blocked URL:</strong> <span id="url">(unknown)</span></div>
-      </div>
-      <div class="actions">
-        <button id="backBtn" type="button">Go back</button>
       </div>
     </main>
 
@@ -80,10 +61,6 @@
 
       document.getElementById("word").textContent = matchedWord;
       document.getElementById("url").textContent = blockedUrl;
-
-      document.getElementById("backBtn").addEventListener("click", () => {
-        history.back();
-      });
     </script>
   </body>
 </html>
