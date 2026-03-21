@@ -231,6 +231,18 @@
         position: relative;
         z-index: 1;
         animation: fade-up 0.4s ease forwards;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      .app-container::-webkit-scrollbar { width: 6px; }
+      .app-container::-webkit-scrollbar-track { background: transparent; }
+      .app-container::-webkit-scrollbar-thumb {
+        background: rgba(148,163,184,0.45);
+        border-radius: 999px;
+      }
+      .app-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(148,163,184,0.7);
       }
     </style>
   </head>
