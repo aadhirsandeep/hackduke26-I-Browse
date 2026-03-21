@@ -99,6 +99,7 @@ const PRESETS = {
 export default function App() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [log, setLog] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -164,7 +165,29 @@ export default function App() {
     }
   };
 
-  const isDisabled = loading || !prompt.trim();
+  const handleReset = async () => {
+    setError("");
+    setStatus("");
+    setResetting(true);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) throw new Error("No active tab found");
+      const response = await chrome.tabs.sendMessage(tab.id, { type: "resetOps" });
+      if (response?.status === "error") {
+        throw new Error(response.error || "Reset failed");
+      }
+      setActivePreset(null);
+      setPrompt("");
+      setLog("");
+      setStatus("Reset applied and persistence cleared");
+    } catch (err) {
+      setError(err.message || "Unknown error");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const isDisabled = loading || resetting || !prompt.trim();
 
   return (
     <>
@@ -343,6 +366,20 @@ export default function App() {
           ) : (
             "Transform →"
           )}
+        </button>
+
+        <button
+          className="transform-btn"
+          onClick={handleReset}
+          disabled={loading || resetting}
+          style={{
+            marginTop: "8px",
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            color: "#fecaca",
+          }}
+        >
+          {resetting ? "Resetting…" : "Reset ↺"}
         </button>
 
         {/* Status */}
