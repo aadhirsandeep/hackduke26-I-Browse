@@ -1,19 +1,41 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getSnapshot") {
-    const elements = document.querySelectorAll("*");
+    // Target meaningful elements — skip pure containers with no useful attributes
+    const SELECTORS = [
+      "a[href]", "img", "video", "button", "input", "h1", "h2", "h3",
+      "[id]", "[aria-label]", "[data-testid]", "[role]",
+      "ytd-rich-item-renderer", "ytd-video-renderer", "ytd-compact-video-renderer",
+      "article", "section", "li", "span", "p", "div[class]"
+    ];
+
+    const seen = new Set();
     const snapshot = [];
-    let count = 0;
-    for (const el of elements) {
-      if (count >= 200) break;
-      const text = (el.innerText || el.textContent || "").trim().slice(0, 60);
-      snapshot.push({
-        tag: el.tagName.toLowerCase(),
-        id: el.id || "",
-        className: typeof el.className === "string" ? el.className : "",
-        text,
-      });
-      count++;
+
+    for (const sel of SELECTORS) {
+      if (snapshot.length >= 300) break;
+      try {
+        for (const el of document.querySelectorAll(sel)) {
+          if (snapshot.length >= 300) break;
+          if (seen.has(el)) continue;
+          seen.add(el);
+
+          const text = (el.getAttribute("aria-label") || el.innerText || el.textContent || "")
+            .trim().replace(/\s+/g, " ").slice(0, 80);
+
+          snapshot.push({
+            tag: el.tagName.toLowerCase(),
+            id: el.id || "",
+            className: typeof el.className === "string" ? el.className.trim().slice(0, 80) : "",
+            text,
+            href: el.getAttribute("href") || "",
+            ariaLabel: el.getAttribute("aria-label") || "",
+            dataTestId: el.getAttribute("data-testid") || "",
+            role: el.getAttribute("role") || "",
+          });
+        }
+      } catch (e) {}
     }
+
     sendResponse({ snapshot });
     return true;
   }
@@ -22,7 +44,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const ops = message.ops;
 
     // 1. restyle
-    if (ops.restyle && typeof ops.restyle === "object") {
+    if (ops.restyle && typeof ops.restyle === "object" && Object.keys(ops.restyle).length > 0) {
       const styleEl = document.createElement("style");
       let css = "";
       for (const [selector, styles] of Object.entries(ops.restyle)) {
@@ -47,11 +69,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (Array.isArray(ops.hide)) {
       for (const selector of ops.hide) {
         try {
-          document.querySelectorAll(selector).forEach((el) => {
-            el.style.display = "none";
+          const matched = document.querySelectorAll(selector);
+          matched.forEach((el) => {
+            // Walk up to hide the whole card if we matched something inside it
+            const card = el.closest("ytd-rich-item-renderer, ytd-video-renderer, article, li") || el;
+            card.style.display = "none";
           });
         } catch (e) {
-          console.warn("evolve: bad hide selector", selector, e);
+          console.warn("I Browse: bad hide selector", selector, e);
         }
       }
     }
@@ -60,9 +85,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (Array.isArray(ops.remove)) {
       for (const selector of ops.remove) {
         try {
-          document.querySelectorAll(selector).forEach((el) => el.remove());
+          const matched = document.querySelectorAll(selector);
+          matched.forEach((el) => {
+            const card = el.closest("ytd-rich-item-renderer, ytd-video-renderer, article, li") || el;
+            card.remove();
+          });
         } catch (e) {
-          console.warn("evolve: bad remove selector", selector, e);
+          console.warn("I Browse: bad remove selector", selector, e);
         }
       }
     }

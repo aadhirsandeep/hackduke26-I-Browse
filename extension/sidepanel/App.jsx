@@ -124,7 +124,7 @@ export default function App() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>evolve(browser)</div>
+      <div style={styles.header}>I Browse</div>
 
       <textarea
         style={styles.textarea}
@@ -150,7 +150,7 @@ export default function App() {
 
       {log && (
         <>
-          <div style={{ fontSize: "12px", color: "#888" }}>Claude response (ops JSON):</div>
+          <div style={{ fontSize: "12px", color: "#888" }}>Gemini response (ops JSON):</div>
           <div style={styles.logBox}>{log}</div>
         </>
       )}

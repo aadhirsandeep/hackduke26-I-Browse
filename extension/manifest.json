@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "evolve(browser)",
+  "name": "I Browse",
   "version": "1.0.0",
   "description": "AI-powered DOM transformation engine",
   "permissions": [
@@ -21,7 +21,7 @@
     }
   ],
   "side_panel": {
-    "default_path": "sidepanel/index.html"
+    "default_path": "panel/index.html"
   },
   "action": {
     "default_title": "evolve(browser)"

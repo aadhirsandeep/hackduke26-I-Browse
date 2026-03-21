@@ -4,11 +4,16 @@ import { resolve } from "path";
 
 export default defineConfig({
   plugins: [react()],
+  base: "./",
   build: {
-    outDir: "../dist/sidepanel",
+    outDir: "../panel",
     emptyOutDir: true,
+    modulePreload: { polyfill: false },
     rollupOptions: {
       input: resolve(__dirname, "index.html"),
+      output: {
+        format: "es",
+      },
     },
   },
 });

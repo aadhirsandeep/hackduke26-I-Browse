@@ -4,9 +4,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any
-import anthropic
+from google import genai
+from google.genai import types
 
-app = FastAPI(title="evolve(browser) backend")
+app = FastAPI(title="I Browse backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,21 +17,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 SYSTEM_PROMPT = """You are a DOM transformation engine for a browser extension.
-Respond with ONLY a valid JSON object matching this schema exactly — no explanation, no markdown, no code fences:
-{ "remove": [], "hide": [], "restyle": {}, "inject": [] }
-Use only selectors likely to match real elements from the snapshot.
-Prefer "hide" over "remove" unless the user explicitly says delete.
-All four keys must always be present."""
+Respond with ONLY a valid JSON object — no explanation, no markdown, no code fences:
+{"remove":[],"hide":[],"restyle":{},"inject":[]}
 
-
-class SnapshotElement(BaseModel):
-    tag: str
-    id: str
-    className: str
-    text: str
+Rules:
+- All four keys must always be present.
+- Prefer hide over remove unless user says delete/remove.
+- Keep selectors short. Max 5 selectors per key.
+- For YouTube video cards use: ytd-rich-item-renderer:has([href*="HANDLE"]) or ytd-rich-item-renderer:has([aria-label*="NAME"])
+- Only use selectors you can confirm from the snapshot."""
 
 
 class TransformRequest(BaseModel):
@@ -38,28 +36,51 @@ class TransformRequest(BaseModel):
     snapshot: list[dict[str, Any]]
 
 
+def build_snapshot_text(snapshot: list[dict]) -> str:
+    lines = []
+    for el in snapshot[:150]:
+        tag = el.get("tag", "")
+        id_ = el.get("id", "")
+        aria = el.get("ariaLabel", "")
+        href = el.get("href", "")
+        text = el.get("text", "").strip().replace("\n", " ")[:60]
+
+        parts = [tag]
+        if id_:
+            parts.append(f'id="{id_}"')
+        if aria:
+            parts.append(f'aria-label="{aria[:60]}"')
+        if href:
+            parts.append(f'href="{href[:60]}"')
+        if text:
+            parts.append(f'>{text}')
+        lines.append(" ".join(parts))
+    return "\n".join(lines)
+
+
 @app.post("/transform")
 async def transform(req: TransformRequest):
-    snapshot_text = "\n".join(
-        f"<{el.get('tag', '')} id=\"{el.get('id', '')}\" class=\"{el.get('className', '')}\">{el.get('text', '')}</{el.get('tag', '')}>"
-        for el in req.snapshot[:200]
-    )
-
-    user_message = f"""User instruction: {req.prompt}
-
-DOM snapshot (top 200 elements):
-{snapshot_text}"""
+    snapshot_text = build_snapshot_text(req.snapshot)
+    user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
 
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
+        response = client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=4096,
+                response_mime_type="application/json",
+            ),
         )
-        raw = message.content[0].text.strip()
 
-        # Strip markdown fences if Claude adds them despite instructions
+        raw = response.text
+        if not raw or not raw.strip():
+            raise HTTPException(status_code=500, detail="Gemini returned an empty response")
+
+        raw = raw.strip()
+
+        # Strip markdown fences just in case
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -67,8 +88,6 @@ DOM snapshot (top 200 elements):
             raw = raw.strip()
 
         ops = json.loads(raw)
-
-        # Ensure all four keys present
         ops.setdefault("remove", [])
         ops.setdefault("hide", [])
         ops.setdefault("restyle", {})
@@ -77,7 +96,9 @@ DOM snapshot (top 200 elements):
         return ops
 
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Claude returned invalid JSON: {e}")
+        raise HTTPException(status_code=500, detail=f"Gemini returned invalid JSON: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
