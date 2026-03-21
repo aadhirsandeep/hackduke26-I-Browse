@@ -28,7 +28,11 @@ Rules:
 - Prefer hide over remove unless user says delete/remove.
 - Keep selectors short. Max 5 selectors per key.
 - For YouTube video cards use: ytd-rich-item-renderer:has([href*="HANDLE"]) or ytd-rich-item-renderer:has([aria-label*="NAME"])
-- Only use selectors you can confirm from the snapshot."""
+- Only use selectors you can confirm from the snapshot.
+- For inject items, you may use either:
+  - Simple: {"tag":"div","id":"x","text":"hello","css":"color:red"}
+  - Rich HTML: {"tag":"div","payload":"<div style='...'>...full html...</div>","location":"body"}
+  Use "payload" when you need to inject complex HTML like diagrams, overlays, or cards."""
 
 
 class TransformRequest(BaseModel):
