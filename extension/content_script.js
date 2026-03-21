@@ -1,6 +1,46 @@
+// Inject visual diff keyframes once
+function ensureDiffStyles() {
+  if (document.getElementById("__ibrowse_diff_styles")) return;
+  const style = document.createElement("style");
+  style.id = "__ibrowse_diff_styles";
+  style.textContent = `
+    @keyframes __ibrowse_flash_red {
+      0%   { outline: 3px solid rgba(239,68,68,0); box-shadow: inset 0 0 0 0 rgba(239,68,68,0); }
+      15%  { outline: 3px solid rgba(239,68,68,0.9); box-shadow: inset 0 0 24px rgba(239,68,68,0.35); }
+      60%  { outline: 3px solid rgba(239,68,68,0.6); box-shadow: inset 0 0 12px rgba(239,68,68,0.2); }
+      100% { outline: 3px solid rgba(239,68,68,0); box-shadow: inset 0 0 0 0 rgba(239,68,68,0); }
+    }
+    @keyframes __ibrowse_flash_green {
+      0%   { outline: 3px solid rgba(52,211,153,0); box-shadow: inset 0 0 0 0 rgba(52,211,153,0); }
+      15%  { outline: 3px solid rgba(52,211,153,0.9); box-shadow: inset 0 0 24px rgba(52,211,153,0.35); }
+      60%  { outline: 3px solid rgba(52,211,153,0.6); box-shadow: inset 0 0 12px rgba(52,211,153,0.2); }
+      100% { outline: 3px solid rgba(52,211,153,0); box-shadow: inset 0 0 0 0 rgba(52,211,153,0); }
+    }
+    .__ibrowse_diff_red {
+      animation: __ibrowse_flash_red 0.75s ease forwards !important;
+      border-radius: 4px;
+      outline-offset: 2px;
+    }
+    .__ibrowse_diff_green {
+      animation: __ibrowse_flash_green 0.6s ease forwards !important;
+      border-radius: 4px;
+      outline-offset: 2px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function flashElement(el, type) {
+  const cls = type === "red" ? "__ibrowse_diff_red" : "__ibrowse_diff_green";
+  el.classList.remove("__ibrowse_diff_red", "__ibrowse_diff_green");
+  // Force reflow so re-adding the class restarts animation
+  void el.offsetWidth;
+  el.classList.add(cls);
+  el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getSnapshot") {
-    // Target meaningful elements — skip pure containers with no useful attributes
     const SELECTORS = [
       "a[href]", "img", "video", "button", "input", "h1", "h2", "h3",
       "[id]", "[aria-label]", "[data-testid]", "[role]",
@@ -41,39 +81,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "applyOps") {
+    ensureDiffStyles();
     const ops = message.ops;
 
-    // 1. restyle
+    // 1. restyle — flash affected elements green
     if (ops.restyle && typeof ops.restyle === "object" && Object.keys(ops.restyle).length > 0) {
       const styleEl = document.createElement("style");
       let css = "";
       for (const [selector, styles] of Object.entries(ops.restyle)) {
         css += `${selector} { ${styles} }\n`;
+        try {
+          document.querySelectorAll(selector).forEach((el) => flashElement(el, "green"));
+        } catch (e) {}
       }
       styleEl.textContent = css;
       document.head.appendChild(styleEl);
     }
 
-    // 2. inject
+    // 2. inject — flash injected elements green after appending
     if (Array.isArray(ops.inject)) {
       for (const item of ops.inject) {
-        const el = document.createElement(item.tag || "div");
-        if (item.id) el.id = item.id;
-        if (item.text) el.textContent = item.text;
-        if (item.css) el.style.cssText = item.css;
-        document.body.appendChild(el);
+        if (item.payload) {
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = item.payload;
+          const target = item.location === "head" ? document.head : document.body;
+          const children = [...wrapper.children];
+          while (wrapper.firstChild) target.appendChild(wrapper.firstChild);
+          // Flash each injected root element green
+          children.forEach((child) => {
+            if (child.isConnected) flashElement(child, "green");
+          });
+        } else {
+          const el = document.createElement(item.tag || "div");
+          if (item.id) el.id = item.id;
+          if (item.text) el.textContent = item.text;
+          if (item.css) el.style.cssText = item.css;
+          document.body.appendChild(el);
+          flashElement(el, "green");
+        }
       }
     }
 
-    // 3. hide
+    // 3. hide — flash red, then hide after animation completes
     if (Array.isArray(ops.hide)) {
       for (const selector of ops.hide) {
         try {
-          const matched = document.querySelectorAll(selector);
-          matched.forEach((el) => {
-            // Walk up to hide the whole card if we matched something inside it
+          document.querySelectorAll(selector).forEach((el) => {
             const card = el.closest("ytd-rich-item-renderer, ytd-video-renderer, article, li") || el;
-            card.style.display = "none";
+            flashElement(card, "red");
+            setTimeout(() => { card.style.display = "none"; }, 700);
           });
         } catch (e) {
           console.warn("I Browse: bad hide selector", selector, e);
@@ -81,14 +137,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     }
 
-    // 4. remove
+    // 4. remove — flash red, then remove after animation completes
     if (Array.isArray(ops.remove)) {
       for (const selector of ops.remove) {
         try {
-          const matched = document.querySelectorAll(selector);
-          matched.forEach((el) => {
+          document.querySelectorAll(selector).forEach((el) => {
             const card = el.closest("ytd-rich-item-renderer, ytd-video-renderer, article, li") || el;
-            card.remove();
+            flashElement(card, "red");
+            setTimeout(() => { card.remove(); }, 700);
           });
         } catch (e) {
           console.warn("I Browse: bad remove selector", selector, e);
