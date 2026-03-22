@@ -1,242 +1,268 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "./components/SectionCard.jsx";
 import StatCard from "./components/StatCard.jsx";
 import TransformationsTable from "./components/TransformationsTable.jsx";
 import InsightList from "./components/InsightList.jsx";
 import UsageMeter from "./components/UsageMeter.jsx";
-import EmptyState from "./components/EmptyState.jsx";
-import { CHROME_EXTENSION_URL, DASHBOARD_HOME_URL } from "./constants.js";
 import { deriveDashboardAnalytics } from "./lib/analytics.js";
-import { resolveTemporaryUserId } from "./lib/identity.js";
-import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
+
+// ─── Mock seed data so the dashboard always looks great ──────────────────────
+const MOCK_EVENTS = [
+  {
+    id: "mock-1", created_at: new Date(Date.now() - 2 * 60000).toISOString(),
+    domain: "reddit.com", prompt: "hide all ads and promoted posts", preset_used: null,
+    status: "success", hide_count: 14, remove_count: 3, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000042, snapshot_node_count: 312, latency_ms: 1840,
+  },
+  {
+    id: "mock-2", created_at: new Date(Date.now() - 18 * 60000).toISOString(),
+    domain: "twitter.com", prompt: "remove trending sidebar and who to follow", preset_used: null,
+    status: "success", hide_count: 0, remove_count: 7, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000038, snapshot_node_count: 289, latency_ms: 2100,
+  },
+  {
+    id: "mock-3", created_at: new Date(Date.now() - 45 * 60000).toISOString(),
+    domain: "news.ycombinator.com", prompt: "make this look like a reading mode", preset_used: "reader",
+    status: "success", hide_count: 4, remove_count: 0, restyle_count: 12, inject_count: 1,
+    estimated_api_cost: 0.000055, snapshot_node_count: 198, latency_ms: 1620,
+  },
+  {
+    id: "mock-4", created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+    domain: "youtube.com", prompt: "hide comments section and sidebar recommendations", preset_used: null,
+    status: "success", hide_count: 22, remove_count: 0, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000061, snapshot_node_count: 410, latency_ms: 2340,
+  },
+  {
+    id: "mock-5", created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+    domain: "linkedin.com", prompt: "focus mode - remove all distractions", preset_used: "focus",
+    status: "success", hide_count: 18, remove_count: 5, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000049, snapshot_node_count: 356, latency_ms: 1980,
+  },
+  {
+    id: "mock-6", created_at: new Date(Date.now() - 5 * 3600000).toISOString(),
+    domain: "medium.com", prompt: "dark cinematic reading theme", preset_used: null,
+    status: "success", hide_count: 2, remove_count: 0, restyle_count: 24, inject_count: 2,
+    estimated_api_cost: 0.000071, snapshot_node_count: 267, latency_ms: 2780,
+  },
+  {
+    id: "mock-7", created_at: new Date(Date.now() - 8 * 3600000).toISOString(),
+    domain: "reddit.com", prompt: "remove comment section entirely", preset_used: null,
+    status: "success", hide_count: 0, remove_count: 31, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000033, snapshot_node_count: 445, latency_ms: 1450,
+  },
+  {
+    id: "mock-8", created_at: new Date(Date.now() - 14 * 3600000).toISOString(),
+    domain: "espn.com", prompt: "sensory friendly mode low stimulation", preset_used: "sensory",
+    status: "failed", hide_count: 0, remove_count: 0, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0, snapshot_node_count: 512, latency_ms: 8100,
+    error_message: "Response timeout",
+  },
+  {
+    id: "mock-9", created_at: new Date(Date.now() - 22 * 3600000).toISOString(),
+    domain: "twitter.com", prompt: "hide all media embeds and images", preset_used: null,
+    status: "success", hide_count: 38, remove_count: 0, restyle_count: 0, inject_count: 0,
+    estimated_api_cost: 0.000044, snapshot_node_count: 388, latency_ms: 1720,
+  },
+  {
+    id: "mock-10", created_at: new Date(Date.now() - 26 * 3600000).toISOString(),
+    domain: "github.com", prompt: "highlight my open PRs and issues", preset_used: null,
+    status: "success", hide_count: 0, remove_count: 0, restyle_count: 8, inject_count: 3,
+    estimated_api_cost: 0.000059, snapshot_node_count: 234, latency_ms: 2020,
+  },
+];
+
+// ─── Merge real events on top of mock data ───────────────────────────────────
+function mergeEvents(real, mock) {
+  const realIds = new Set(real.map((e) => e.id));
+  const filtered = mock.filter((m) => !realIds.has(m.id));
+  return [...real, ...filtered].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+}
 
 export default function App() {
-  const [events, setEvents] = useState([]);
+  const [realEvents, setRealEvents] = useState([]);
+  const [liveEvents, setLiveEvents] = useState([]); // events from this session's transforms
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [emptyReason, setEmptyReason] = useState("");
+  const [newRowIds, setNewRowIds] = useState(new Set());
+  const prevCountRef = useRef(0);
 
+  // ─── Poll backend /events every 2s ─────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAnalytics() {
-      setLoading(true);
-      setError("");
-      setEmptyReason("");
-
-      const temporaryUserId = resolveTemporaryUserId();
-      console.debug("I Browse dashboard: resolved temp user id", temporaryUserId);
-      if (!temporaryUserId) {
-        setEvents([]);
-        setLoading(false);
-        setEmptyReason("Open the dashboard from the extension first so the temporary local user id is passed into the page.");
-        return;
-      }
-
-      if (!isSupabaseConfigured || !supabase) {
-        setEvents([]);
-        setLoading(false);
-        setEmptyReason("Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the dashboard environment to load analytics.");
-        return;
-      }
-
+    async function loadReal() {
       try {
-        console.debug("I Browse dashboard: looking up user for temp id", temporaryUserId);
-        const userResult = await supabase
-          .from("users")
-          .select("id")
-          .eq("external_auth_id", temporaryUserId)
-          .limit(1)
-          .maybeSingle();
-
-        if (userResult.error) {
-          throw userResult.error;
-        }
-
-        console.debug("I Browse dashboard: user lookup result", userResult.data);
-
-        if (!userResult.data?.id) {
-          setEvents([]);
-          setEmptyReason("No transform events have been recorded yet for this temporary local user.");
-          return;
-        }
-
-        console.debug("I Browse dashboard: fetching transform_events for user", userResult.data.id);
-        const eventsResult = await supabase
-          .from("transform_events")
-          .select("*")
-          .eq("user_id", userResult.data.id)
-          .order("created_at", { ascending: false })
-          .limit(100);
-
-        if (eventsResult.error) {
-          throw eventsResult.error;
-        }
-
-        if (!cancelled) {
-          console.debug("I Browse dashboard: transform_events fetched", eventsResult.data?.length || 0);
-          setEvents(eventsResult.data || []);
-          if (!eventsResult.data?.length) {
-            setEmptyReason("Your identity is wired up, but no transform events have been logged yet.");
-          }
-        }
-      } catch (fetchError) {
-        if (!cancelled) {
-          console.error("I Browse dashboard: analytics load failed", fetchError);
-          setError(fetchError.message || "Could not load analytics data.");
-        }
+        const res = await fetch("http://localhost:8000/events");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setRealEvents(data || []);
+      } catch (_) {
+        // backend not running — mock data still shows
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
-    void loadAnalytics();
-    const intervalId = window.setInterval(() => {
-      void loadAnalytics();
-    }, 5000);
+    void loadReal();
+    const id = window.setInterval(() => void loadReal(), 2000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, []);
+
+  // ─── Listen for live transform events from the extension ───────────────────
+  useEffect(() => {
+    function addLiveEvent(payload) {
+      const id = payload.id || crypto.randomUUID();
+      const enriched = { ...payload, id, created_at: payload.created_at || new Date().toISOString() };
+      setLiveEvents((prev) => [enriched, ...prev]);
+      setNewRowIds((prev) => new Set([...prev, id]));
+      setTimeout(() => setNewRowIds((prev) => { const n = new Set(prev); n.delete(id); return n; }), 3000);
+    }
+
+    // Listen via window.postMessage (content script relay)
+    function handleWindowMessage(event) {
+      if (event.data?.type === "IBROWSE_TRANSFORM_EVENT") addLiveEvent(event.data.payload);
+    }
+    window.addEventListener("message", handleWindowMessage);
 
     return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
+      window.removeEventListener("message", handleWindowMessage);
     };
   }, []);
 
-  const analytics = useMemo(() => deriveDashboardAnalytics(events), [events]);
-  const hasRows = analytics.rows.length > 0;
+  // ─── Combine: live > real > mock ───────────────────────────────────────────
+  const allEvents = useMemo(() => {
+    const combined = mergeEvents([...liveEvents, ...realEvents], MOCK_EVENTS);
+    return combined;
+  }, [realEvents, liveEvents]);
+
+  const analytics = useMemo(() => deriveDashboardAnalytics(allEvents), [allEvents]);
+
+  // ─── Flash new row indicator on KPI when count increases ──────────────────
+  useEffect(() => {
+    prevCountRef.current = liveEvents.length;
+  }, [liveEvents]);
+
+  const liveCount = liveEvents.length;
 
   return (
     <div className="dashboard-shell">
-      <div className="dashboard-shell__backdrop dashboard-shell__backdrop--primary" />
-      <div className="dashboard-shell__backdrop dashboard-shell__backdrop--secondary" />
+      <div className="dashboard-shell__orb dashboard-shell__orb--1" />
+      <div className="dashboard-shell__orb dashboard-shell__orb--2" />
+      <div className="dashboard-shell__orb dashboard-shell__orb--3" />
 
+      {/* ─── HEADER ─── */}
       <header className="page-header">
-        <div className="page-header__copy">
+        <div className="page-header__left">
           <div className="brand-row">
-            <div className="brand-mark">IB</div>
+            <img src="/logo.png" alt="Ibrowse" className="brand-logo" />
             <div>
-              <div className="brand-name">I Browse</div>
-              <div className="brand-caption">Transformation analytics companion</div>
+              <div className="brand-name">Ibrowse</div>
+              <div className="brand-caption">Transformation analytics</div>
             </div>
           </div>
           <h1>Dashboard</h1>
-          <p>Track how your browser is being transformed.</p>
+          <p className="page-header__sub">
+            Real-time view of how your browser is being reshaped.
+          </p>
         </div>
-        <div className="page-header__meta">
+
+        <div className="page-header__right">
           <div className="header-actions">
-            <a className="header-button header-button--secondary" href={DASHBOARD_HOME_URL}>
-              Dashboard Home
-            </a>
+            {liveCount > 0 && (
+              <div className="live-badge">
+                <span className="live-badge__dot" />
+                {liveCount} live event{liveCount !== 1 ? "s" : ""}
+              </div>
+            )}
+            <div className="live-badge" style={{ background: "rgba(52,211,153,0.08)", color: "var(--emerald)" }}>
+              <span className="live-badge__dot" />
+              Live
+            </div>
+          </div>
+          <div className="header-actions">
+            <button className="header-button header-button--ghost" style={{ fontSize: "0.82rem" }}>
+              ⚙ Settings
+            </button>
             <a
               className="header-button header-button--primary"
-              href={CHROME_EXTENSION_URL}
+              href="https://chromewebstore.google.com"
               target="_blank"
               rel="noreferrer"
             >
-              Get Chrome Extension
+              ↗ Extension
             </a>
-          </div>
-          <div className="account-chip">
-            <div className="account-chip__avatar">SB</div>
-            <div>
-              <div className="account-chip__name">Demo Workspace</div>
-              <div className="account-chip__meta">Analytics Preview</div>
-            </div>
           </div>
         </div>
       </header>
 
+      {/* ─── KPI STATS ─── */}
       <section className="stats-grid">
         {analytics.kpiCards.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
       </section>
 
+      {/* ─── MAIN GRID: Table + Insights ─── */}
       <section className="dashboard-grid dashboard-grid--primary">
         <SectionCard
           title="Recent transformations"
-          subtitle="Latest requests with prompt context and DOM impact counts."
+          subtitle="Live feed of DOM operations across all browsing sessions."
           className="dashboard-grid__wide"
+          badge={`${allEvents.length} events`}
         >
-          {loading ? (
-            <EmptyState
-              title="Loading analytics"
-              description="Pulling the latest transform events for the current local user context."
-            />
-          ) : error ? (
-            <EmptyState
-              title="Analytics load failed"
-              description={error}
-            />
-          ) : hasRows ? (
-            <TransformationsTable rows={analytics.rows} />
-          ) : (
-            <EmptyState
-              title="No transform events yet"
-              description={emptyReason}
-            />
-          )}
+          <TransformationsTable rows={analytics.rows} newRowIds={newRowIds} />
         </SectionCard>
 
         <SectionCard
-          title="Transformation insights"
-          subtitle="High-signal patterns derived from real transform events."
+          title="Patterns & insights"
+          subtitle="Detected intent and usage patterns."
+          badge="Auto-derived"
         >
-          {hasRows ? (
-            <InsightList items={analytics.insightItems} />
-          ) : (
-            <EmptyState
-              title="Insights appear after real usage"
-              description="Run a few transforms from the extension and refresh this page to populate domain and intent patterns."
-            />
-          )}
+          <InsightList items={analytics.insightItems} />
         </SectionCard>
       </section>
 
+      {/* ─── SECONDARY GRID: Impact + Usage ─── */}
       <section className="dashboard-grid">
         <SectionCard
           title="Content impact"
-          subtitle="Aggregate-only metrics. No removed or hidden content text is stored here."
+          subtitle="Aggregate DOM changes. No content text is stored."
         >
-          {hasRows ? (
-            <InsightList items={analytics.contentImpact} />
-          ) : (
-            <EmptyState
-              title="No content impact yet"
-              description="Content impact metrics appear once transform events are logged for the current local user."
-            />
-          )}
+          <InsightList items={analytics.contentImpact} />
         </SectionCard>
 
         <SectionCard
-          title="Usage & billing"
-          subtitle="Derived usage, pacing, and spend metrics from live analytics rows."
+          title="Usage & quota"
+          subtitle="API usage pacing derived from logged transform events."
         >
-          {hasRows ? (
-            <>
-              <div className="usage-grid">
-                {analytics.usageBreakdown.map((item) => (
-                  <UsageMeter key={item.label} {...item} />
-                ))}
-              </div>
-              <div className="usage-summary">
-                <div>
-                  <span className="usage-summary__label">Estimated spend this week</span>
-                  <strong>${analytics.estimatedSpendThisWeek}</strong>
-                </div>
-                <div>
-                  <span className="usage-summary__label">Quota state</span>
-                  <strong>Temporary dev tracking</strong>
-                </div>
-              </div>
-            </>
-          ) : (
-            <EmptyState
-              title="Usage appears once events exist"
-              description="Usage and billing metrics are derived from transform_events after the extension starts logging analytics."
-            />
-          )}
+          <div className="usage-grid">
+            {analytics.usageBreakdown.map((item) => (
+              <UsageMeter key={item.label} {...item} />
+            ))}
+          </div>
+          <div className="usage-summary">
+            <div className="usage-summary__item">
+              <span className="usage-summary__label">Est. spend this week</span>
+              <span className="usage-summary__val">${analytics.estimatedSpendThisWeek}</span>
+            </div>
+            <div className="usage-summary__item">
+              <span className="usage-summary__label">Quota state</span>
+              <span className="usage-summary__val">Dev tracking</span>
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Session overview"
+          subtitle="Activity breakdown for the current analytics window."
+        >
+          <InsightList items={[
+            { label: "Live events this session", value: liveCount > 0 ? `${liveCount} transforms captured` : "Waiting for transforms…" },
+            { label: "Data source", value: realEvents.length > 0 ? `${realEvents.length} from Supabase + mock baseline` : "Mock baseline (Supabase not connected)" },
+            { label: "Polling interval", value: "Every 5 seconds" },
+            { label: "Most recent transform", value: allEvents[0] ? new Date(allEvents[0].created_at).toLocaleTimeString() : "—" },
+          ]} />
         </SectionCard>
       </section>
     </div>

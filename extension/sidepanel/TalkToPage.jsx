@@ -39,6 +39,20 @@ async function applyOps(ops) {
   } catch {}
 }
 
+async function getAnalyticsContext() {
+  try {
+    const local = await chrome.storage.local.get(["ibrowse_temp_user_id", "ibrowse_client_instance_id"]);
+    const session = await (chrome.storage.session ?? chrome.storage.local).get(["ibrowse_session_id"]);
+    return {
+      temporary_user_id: local.ibrowse_temp_user_id || null,
+      client_instance_id: local.ibrowse_client_instance_id || null,
+      session_id: session.ibrowse_session_id || null,
+    };
+  } catch {
+    return { temporary_user_id: null, client_instance_id: null, session_id: null };
+  }
+}
+
 async function handleVoiceCommand(message, pageContext, accessToken) {
   console.log("[TalkToPage] handleVoiceCommand start, fetching classify...");
   // First ask Gemini to classify: is this a page transform or a question?
@@ -61,19 +75,30 @@ async function handleVoiceCommand(message, pageContext, accessToken) {
     const snapshot = await getSnapshot();
     if (!snapshot) throw new Error("Could not read the page. Try refreshing.");
 
+    const analyticsCtx = await getAnalyticsContext();
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => [null]);
+
     const transformRes = await fetch(`${BACKEND_URL}/transform`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders(accessToken),
       },
-      body: JSON.stringify({ prompt: message, snapshot }),
+      body: JSON.stringify({
+        prompt: message,
+        snapshot,
+        ...analyticsCtx,
+        page_url: tab?.url || null,
+        browser_info: navigator.userAgent,
+      }),
     });
     if (!transformRes.ok) throw new Error(`Transform error ${transformRes.status}`);
     const ops = await transformRes.json();
     await applyOps(ops);
 
     const affected = (ops.hide?.length || 0) + (ops.remove?.length || 0) + (ops.restyle ? Object.keys(ops.restyle).length : 0) + (ops.inject?.length || 0);
+
+
     return affected > 0 ? `Done! I've applied your changes to the page.` : "I tried but couldn't find matching elements on this page.";
   }
 

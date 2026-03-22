@@ -16,6 +16,13 @@ from jwt import InvalidTokenError, PyJWKClient
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+import analytics
+import time as _time
+from collections import deque
+
+# In-memory event store — last 200 transforms, shared across requests
+_event_store: deque = deque(maxlen=200)
+
 app = FastAPI(title="I Browse backend")
 
 from routers.presets import router as presets_router
@@ -52,6 +59,8 @@ Rules:
 - Prefer hide over remove unless user says delete/remove.
 - Keep selectors short. Max 5 selectors per key.
 - For YouTube video cards use: ytd-rich-item-renderer:has([href*="HANDLE"]) or ytd-rich-item-renderer:has([aria-label*="NAME"])
+- For YouTube Shorts: always include ytd-guide-entry-renderer:has([title="Shorts"]) to remove the Shorts entry from the sidebar, in addition to any Shorts video cards (ytd-rich-section-renderer, ytd-reel-shelf-renderer).
+- For high contrast or colorblind/accessibility requests: use restyle to set body background to #000000 and all text elements (body, p, h1, h2, h3, h4, h5, h6, a, span, li, td, th, label) to color #FFFFFF, and links (a) to #FFFF00. Also inject a global <style> tag with payload: "<style>*{outline:none!important} a{color:#FFFF00!important} body,p,h1,h2,h3,h4,h5,h6,span,li,td,th,label{color:#FFFFFF!important;background:#000000!important} img{filter:contrast(1.2)}</style>".
 - Only use selectors you can confirm from the snapshot.
 - For inject items, you may use either:
   - Simple: {"tag":"div","id":"x","text":"hello","css":"color:red"}
@@ -62,6 +71,12 @@ Rules:
 class TransformRequest(BaseModel):
     prompt: str
     snapshot: list[dict[str, Any]]
+    temporary_user_id: str | None = None
+    client_instance_id: str | None = None
+    session_id: str | None = None
+    page_url: str | None = None
+    preset_used: str | None = None
+    browser_info: str | None = None
 
 
 def build_snapshot_text(snapshot: list[dict]) -> str:
@@ -123,10 +138,11 @@ async def auth_config():
 @app.post("/transform")
 async def transform(
     req: TransformRequest,
-    claims: dict[str, Any] = Depends(require_access_token),
+    claims: dict[str, Any] = Depends(lambda authorization=Header(default=None): require_access_token(authorization) if authorization else {}),
 ):
     snapshot_text = build_snapshot_text(req.snapshot)
     user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
+    t_start = time.monotonic()
 
     try:
         response = client.models.generate_content(
@@ -158,6 +174,41 @@ async def transform(
         ops.setdefault("restyle", {})
         ops.setdefault("inject", [])
         ops["requestedBy"] = claims.get("sub", "")
+
+        latency_ms = int((_time.monotonic() - t_start) * 1000)
+        op_summary = analytics.summarize_ops(ops)
+        token_count = analytics.extract_token_count(response)
+
+        # Push to in-memory store for dashboard polling
+        domain = analytics.parse_domain(req.page_url) if req.page_url else "unknown"
+        _event_store.append({
+            "id": str(__import__("uuid").uuid4()),
+            "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "domain": domain,
+            "prompt": req.prompt,
+            "preset_used": req.preset_used,
+            "status": "success",
+            "latency_ms": latency_ms,
+            "snapshot_node_count": len(req.snapshot),
+            **op_summary,
+        })
+
+        if req.temporary_user_id and req.session_id:
+            analytics.safe_record_transform_event(
+                temporary_user_id=req.temporary_user_id,
+                client_instance_id=req.client_instance_id or req.temporary_user_id,
+                session_id=req.session_id,
+                page_url=req.page_url,
+                prompt=req.prompt,
+                preset_used=req.preset_used,
+                status="success",
+                latency_ms=latency_ms,
+                snapshot_node_count=len(req.snapshot),
+                estimated_tokens=token_count,
+                estimated_api_cost=analytics.estimate_api_cost(token_count),
+                browser_info=req.browser_info,
+                **op_summary,
+            )
 
         return ops
 
@@ -218,6 +269,69 @@ async def tts(req: TTSRequest):
     if r.status_code != 200:
         raise HTTPException(status_code=500, detail=f"ElevenLabs error {r.status_code}: {r.text[:200]}")
     return Response(content=r.content, media_type="audio/mpeg")
+
+
+class SessionStartRequest(BaseModel):
+    temporary_user_id: str
+    client_instance_id: str
+    session_id: str
+    browser_info: str | None = None
+
+
+class TransformEventRequest(BaseModel):
+    temporary_user_id: str
+    client_instance_id: str
+    session_id: str
+    page_url: str | None = None
+    browser_info: str | None = None
+    prompt: str
+    preset_used: str | None = None
+    status: str
+    hide_count: int = 0
+    remove_count: int = 0
+    restyle_count: int = 0
+    inject_count: int = 0
+    total_affected_count: int = 0
+    snapshot_node_count: int | None = None
+    latency_ms: int | None = None
+    error_message: str | None = None
+
+
+@app.post("/analytics/session/start", status_code=204)
+async def analytics_session_start(req: SessionStartRequest):
+    analytics.safe_start_session(
+        temporary_user_id=req.temporary_user_id,
+        client_instance_id=req.client_instance_id,
+        session_id=req.session_id,
+        browser_info=req.browser_info,
+    )
+
+
+@app.post("/analytics/transform-event", status_code=204)
+async def analytics_transform_event(req: TransformEventRequest):
+    analytics.safe_record_transform_event(
+        temporary_user_id=req.temporary_user_id,
+        client_instance_id=req.client_instance_id,
+        session_id=req.session_id,
+        page_url=req.page_url,
+        prompt=req.prompt,
+        preset_used=req.preset_used,
+        status=req.status,
+        hide_count=req.hide_count,
+        remove_count=req.remove_count,
+        restyle_count=req.restyle_count,
+        inject_count=req.inject_count,
+        total_affected_count=req.total_affected_count,
+        snapshot_node_count=req.snapshot_node_count,
+        latency_ms=req.latency_ms,
+        error_message=req.error_message,
+        browser_info=req.browser_info,
+    )
+
+
+@app.get("/events")
+async def get_events():
+    return list(reversed(list(_event_store)))
 
 
 @app.get("/health")

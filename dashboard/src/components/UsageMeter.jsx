@@ -1,11 +1,11 @@
 export default function UsageMeter({ label, current, total, helper, tone }) {
-  const pct = Math.min(100, Math.round((current / total) * 100));
+  const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
   return (
     <div className="usage-meter">
       <div className="usage-meter__header">
-        <span>{label}</span>
-        <span>{pct}%</span>
+        <span className="usage-meter__label">{label}</span>
+        <span className="usage-meter__pct">{pct}%</span>
       </div>
       <div className="usage-meter__track">
         <div
@@ -13,7 +13,7 @@ export default function UsageMeter({ label, current, total, helper, tone }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="usage-meter__helper">{helper}</div>
+      {helper && <div className="usage-meter__helper">{helper}</div>}
     </div>
   );
 }

@@ -949,19 +949,32 @@ export default function App() {
               justifyContent: "space-between",
             }}
           >
-            <span
-              style={{
-                fontSize: "22px",
-                fontWeight: "700",
-                background:
-                  "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              I Browse
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <img
+                src="./logo.png"
+                alt="Ibrowse"
+                style={{
+                  width: "46px",
+                  height: "46px",
+                  borderRadius: "13px",
+                  objectFit: "cover",
+                  boxShadow: "0 0 16px rgba(130,80,255,0.45), 0 0 6px rgba(34,211,238,0.2)",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "22px",
+                  fontWeight: "700",
+                  background: "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  letterSpacing: "-0.5px",
+                }}
+              >
+                Ibrowse
+              </span>
+            </div>
             <div
               className="live-dot"
               title={signedIn ? "Signed in" : "Signed out"}

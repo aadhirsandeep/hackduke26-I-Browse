@@ -193,6 +193,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message.type === "IBROWSE_BROADCAST_TRANSFORM") {
+      // Write to storage so dashboard can poll for it
+      await chrome.storage.local.set({ ibrowse_latest_transform: message.payload });
+      sendResponse({ ok: true });
+      return;
+    }
+
     sendResponse({ error: "Unsupported message type" });
   })().catch((error) => {
     sendResponse({ error: error.message || "Auth request failed" });
