@@ -6,7 +6,8 @@
   "permissions": [
     "sidePanel",
     "activeTab",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -25,5 +26,15 @@
   },
   "action": {
     "default_title": "evolve(browser)"
-  }
+  },
+  "optional_permissions": [],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["raw-audio-processor.js", "audio-concat-processor.js", "talk.html", "elevenlabs.umd.js", "livekit.umd.js", "convai-widget.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

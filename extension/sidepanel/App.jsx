@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import TalkToPage from "./TalkToPage";
 
 const PRESETS = {
   Reader: {
@@ -376,6 +377,9 @@ export default function App() {
             )}
           </div>
         )}
+
+        {/* Talk to the Page */}
+        <TalkToPage />
       </div>
     </>
   );

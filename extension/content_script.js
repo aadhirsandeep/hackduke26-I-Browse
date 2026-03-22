@@ -80,6 +80,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "getPageText") {
+    const text = document.body.innerText.slice(0, 3000);
+    sendResponse({ text });
+    return true;
+  }
+
   if (message.type === "applyOps") {
     ensureDiffStyles();
     const ops = message.ops;

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Mic Permission</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #080810;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+    p { color: #94a3b8; font-size: 14px; line-height: 1.6; }
+    button {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #status { font-size: 13px; color: #67e8f9; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <h2 style="font-size:18px;font-weight:700;">Microphone Access</h2>
+  <p>I Browse needs microphone access to enable "Talk to the Page".<br/>Click below and allow when Chrome asks.</p>
+  <button id="btn">Allow Microphone</button>
+  <div id="status"></div>
+  <script>
+    document.getElementById("btn").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      status.textContent = "Requesting…";
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        status.textContent = "✓ Microphone granted! You can close this tab.";
+        status.style.color = "#6ee7b7";
+        // Notify the extension
+        chrome.runtime.sendMessage({ type: "micGranted" });
+        setTimeout(() => window.close(), 1500);
+      } catch (err) {
+        status.textContent = "✗ " + err.message;
+        status.style.color = "#fca5a5";
+      }
+    });
+  </script>
+</body>
+</html>

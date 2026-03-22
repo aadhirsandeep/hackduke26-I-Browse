@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(npm run:*)",
+      "Bash(grep -r \"sendMessage\\\\|sendFeedback\\\\|send\\\\b\" c:/Users/Sande/hackduke26-I-Browse/extension/sidepanel/node_modules/@11labs/client/dist/ --include=*.js -l)"
     ]
   }
 }

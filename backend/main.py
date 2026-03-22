@@ -1,7 +1,9 @@
 import os
 import json
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Any
 from google import genai
@@ -105,6 +107,55 @@ async def transform(req: TransformRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class ChatRequest(BaseModel):
+    message: str
+    page_context: str = ""
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    system = f"""You are a helpful assistant answering questions about a webpage the user is reading.
+Be concise — 1-3 sentences max. Speak naturally as if in a conversation.
+Page content:
+{req.page_context[:3000]}"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=req.message,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=256,
+            ),
+        )
+        text = response.text or ""
+        return {"reply": text.strip()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+ELEVENLABS_API_KEY = "sk_ce781fbefe729976f84005e9b25c534e65081973bd176b39"
+ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
+
+
+class TTSRequest(BaseModel):
+    text: str
+
+
+@app.post("/tts")
+async def tts(req: TTSRequest):
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            url,
+            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+            json={"text": req.text, "model_id": "eleven_turbo_v2", "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=500, detail=f"ElevenLabs error {r.status_code}: {r.text[:200]}")
+    return Response(content=r.content, media_type="audio/mpeg")
 
 
 @app.get("/health")
