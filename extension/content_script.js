@@ -1,3 +1,5 @@
+console.debug("I Browse content script: loaded", window.location.href);
+
 // Inject visual diff keyframes once
 function ensureDiffStyles() {
   if (document.getElementById("__ibrowse_diff_styles")) return;
@@ -39,8 +41,16 @@ function flashElement(el, type) {
   el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
 }
 
+console.debug("I Browse content script: listener registration ready");
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "ping") {
+    console.debug("I Browse content script: ping received", window.location.href);
+    sendResponse({ status: "ready", url: window.location.href });
+    return true;
+  }
+
   if (message.type === "getSnapshot") {
+    console.debug("I Browse content script: getSnapshot received", window.location.href);
     const SELECTORS = [
       "a[href]", "img", "video", "button", "input", "h1", "h2", "h3",
       "[id]", "[aria-label]", "[data-testid]", "[role]",
@@ -81,6 +91,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "applyOps") {
+    console.debug("I Browse content script: applyOps received", window.location.href);
     ensureDiffStyles();
     const ops = message.ops;
 

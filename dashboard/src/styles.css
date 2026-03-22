@@ -487,6 +487,38 @@ button {
   margin-bottom: 6px;
 }
 
+.empty-state {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 34%);
+  border: 1px dashed rgba(103, 232, 249, 0.18);
+}
+
+.empty-state__eyebrow {
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+.empty-state__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.empty-state__description {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
 @media (max-width: 1280px) {
   .stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

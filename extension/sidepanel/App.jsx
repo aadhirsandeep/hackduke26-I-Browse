@@ -1,5 +1,10 @@
-import React, { useState } from "react";
-import { DASHBOARD_URL } from "./config.js";
+import React, { useEffect, useState } from "react";
+import { BACKEND_URL } from "./config.js";
+import {
+  buildDashboardUrl,
+  ensureAnalyticsContext,
+  logClientTransformEvent,
+} from "./analytics.js";
 
 const PRESETS = {
   Reader: {
@@ -107,6 +112,57 @@ export default function App() {
   const [activePreset, setActivePreset] = useState(null);
   const [hoveredPreset, setHoveredPreset] = useState(null);
 
+  useEffect(() => {
+    void ensureAnalyticsContext();
+  }, []);
+
+  const ensureContentScriptReady = async (tab) => {
+    console.debug("I Browse: ensureContentScriptReady", { tabId: tab?.id, url: tab?.url });
+
+    if (!tab?.id) {
+      throw new Error("No active tab found");
+    }
+
+    const tabUrl = tab.url || "";
+    const unsupportedUrl =
+      tabUrl.startsWith("chrome://") ||
+      tabUrl.startsWith("chrome-extension://") ||
+      tabUrl.startsWith("edge://") ||
+      tabUrl.startsWith("about:");
+
+    if (unsupportedUrl) {
+      throw new Error("I Browse cannot run on this browser page. Open a normal website tab and try again.");
+    }
+
+    try {
+      console.debug("I Browse: pinging content script", tab.id);
+      await chrome.tabs.sendMessage(tab.id, { type: "ping" });
+      console.debug("I Browse: content script already connected", tab.id);
+      return;
+    } catch (error) {
+      console.warn("I Browse: content script ping failed, attempting injection", error);
+    }
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content_script.js"],
+      });
+      console.debug("I Browse: content script injected", tab.id);
+    } catch (error) {
+      console.error("I Browse: content script injection failed", error);
+      throw new Error("Content script is unavailable for this tab. Refresh the page once and try again.");
+    }
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "ping" });
+      console.debug("I Browse: content script connected after injection", tab.id);
+    } catch (error) {
+      console.error("I Browse: content script still unreachable after injection", error);
+      throw new Error("I Browse needs this page refreshed after extension reload. Refresh the tab and try again.");
+    }
+  };
+
   const handleTransform = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
@@ -115,35 +171,65 @@ export default function App() {
     setError("");
 
     try {
+      console.debug("I Browse: transform click");
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      console.debug("I Browse: active tab resolved", tab);
       if (!tab?.id) throw new Error("No active tab found");
+      const analyticsContext = await ensureAnalyticsContext();
+      console.debug("I Browse: analytics context ready", analyticsContext);
+      await ensureContentScriptReady(tab);
 
       let snapshot;
       try {
+        console.debug("I Browse: requesting snapshot", tab.id);
         const response = await chrome.tabs.sendMessage(tab.id, { type: "getSnapshot" });
         snapshot = response.snapshot;
+        console.debug("I Browse: snapshot collected", snapshot?.length ?? 0);
       } catch (e) {
-        throw new Error("Could not reach content script. Try refreshing the page.");
+        console.error("I Browse: snapshot request failed", e);
+        throw new Error("Could not reach the page script. Refresh the tab and try again.");
       }
 
-      const res = await fetch("http://localhost:8000/transform", {
+      console.debug("I Browse: sending /transform request");
+      console.debug("I Browse: /transform payload", {
+        temporary_user_id: analyticsContext.temporaryUserId,
+        client_instance_id: analyticsContext.clientInstanceId,
+        session_id: analyticsContext.sessionId,
+        page_url: tab.url,
+        prompt: prompt.trim(),
+        snapshot_node_count: snapshot?.length ?? 0,
+      });
+      const res = await fetch(`${BACKEND_URL}/transform`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), snapshot }),
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          snapshot,
+          temporary_user_id: analyticsContext.temporaryUserId,
+          client_instance_id: analyticsContext.clientInstanceId,
+          session_id: analyticsContext.sessionId,
+          page_url: tab.url,
+          browser_info: analyticsContext.browserInfo,
+          preset_used: null,
+        }),
       });
 
       if (!res.ok) {
         const text = await res.text();
+        console.warn("I Browse: /transform returned error", res.status, text);
         throw new Error(`Backend error ${res.status}: ${text}`);
       }
 
       const ops = await res.json();
+      console.debug("I Browse: /transform success", ops);
       setLog(JSON.stringify(ops, null, 2));
       await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops });
       setStatus("Applied successfully");
     } catch (err) {
+      console.error("I Browse: transform failed", err);
       setError(err.message || "Unknown error");
     } finally {
+      console.debug("I Browse: transform flow complete");
       setLoading(false);
     }
   };
@@ -153,20 +239,45 @@ export default function App() {
     setError("");
     setStatus("");
     setLog("");
+    const startedAt = performance.now();
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) throw new Error("No active tab found");
+      const analyticsContext = await ensureAnalyticsContext();
+      await ensureContentScriptReady(tab);
       await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops: preset.ops });
       setActivePreset(name);
       setStatus(`${preset.icon} ${name} mode applied`);
       setLog(JSON.stringify(preset.ops, null, 2));
+      void logClientTransformEvent({
+        context: analyticsContext,
+        pageUrl: tab.url,
+        prompt: `Apply ${name} preset`,
+        presetUsed: name,
+        status: "success",
+        ops: preset.ops,
+        latencyMs: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
+      const analyticsContext = await ensureAnalyticsContext();
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      void logClientTransformEvent({
+        context: analyticsContext,
+        pageUrl: tab?.url,
+        prompt: `Apply ${name} preset`,
+        presetUsed: name,
+        status: "failed",
+        ops: preset.ops,
+        latencyMs: Math.round(performance.now() - startedAt),
+        errorMessage: err.message || "Unknown error",
+      });
       setError(err.message || "Unknown error");
     }
   };
 
   const handleOpenDashboard = async () => {
-    await chrome.tabs.create({ url: DASHBOARD_URL });
+    const analyticsContext = await ensureAnalyticsContext();
+    await chrome.tabs.create({ url: buildDashboardUrl(analyticsContext.temporaryUserId) });
   };
 
   const isDisabled = loading || !prompt.trim();
