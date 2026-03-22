@@ -16,12 +16,15 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #fafaf8 !important; color: #1a1a1a !important;",
-        "body": "max-width: 740px !important; margin: 0 auto !important; padding: 32px 24px !important; font-size: 18px !important; line-height: 1.85 !important;",
-        "p, li, blockquote": "font-size: 18px !important; line-height: 1.85 !important; color: #222 !important;",
-        "h1, h2, h3, h4": "font-family: Georgia, serif !important; color: #111 !important; line-height: 1.3 !important;",
-        "img": "max-width: 100% !important; height: auto !important; border-radius: 8px !important;",
-        "a": "color: #b45309 !important;",
+        "html, body":
+          "background: #fafaf8 !important; color: #1a1a1a !important;",
+        body: "max-width: 740px !important; margin: 0 auto !important; padding: 32px 24px !important; font-size: 18px !important; line-height: 1.85 !important;",
+        "p, li, blockquote":
+          "font-size: 18px !important; line-height: 1.85 !important; color: #222 !important;",
+        "h1, h2, h3, h4":
+          "font-family: Georgia, serif !important; color: #111 !important; line-height: 1.3 !important;",
+        img: "max-width: 100% !important; height: auto !important; border-radius: 8px !important;",
+        a: "color: #b45309 !important;",
       },
       inject: [],
     },
@@ -39,13 +42,15 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #09090b !important; color: #e4e4e7 !important;",
-        "body": "background: #09090b !important;",
-        "a": "color: #a78bfa !important;",
-        "img": "filter: brightness(0.88) contrast(1.05) !important; border-radius: 6px !important;",
+        "html, body":
+          "background: #09090b !important; color: #e4e4e7 !important;",
+        body: "background: #09090b !important;",
+        a: "color: #a78bfa !important;",
+        img: "filter: brightness(0.88) contrast(1.05) !important; border-radius: 6px !important;",
         "h1, h2, h3, h4, h5, h6": "color: #fafafa !important;",
         "p, li, td, th, span": "color: #d4d4d8 !important;",
-        "input, textarea, select": "background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important;",
+        "input, textarea, select":
+          "background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important;",
       },
       inject: [],
     },
@@ -63,11 +68,13 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #f5f0eb !important; color: #3d3530 !important;",
-        "body": "font-size: 17px !important; line-height: 1.8 !important; letter-spacing: 0.015em !important;",
+        "html, body":
+          "background: #f5f0eb !important; color: #3d3530 !important;",
+        body: "font-size: 17px !important; line-height: 1.8 !important; letter-spacing: 0.015em !important;",
         "img, video": "filter: saturate(0.5) brightness(1.02) !important;",
-        "a": "color: #6b5a4e !important;",
-        "h1, h2, h3, h4": "color: #2d2520 !important; font-weight: 600 !important;",
+        a: "color: #6b5a4e !important;",
+        "h1, h2, h3, h4":
+          "color: #2d2520 !important; font-weight: 600 !important;",
         "p, li": "color: #3d3530 !important;",
       },
       inject: [],
@@ -86,12 +93,15 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #0f172a !important; color: #e2e8f0 !important;",
-        "body": "background: #0f172a !important;",
-        "p, li": "color: #cbd5e1 !important; font-size: 17px !important; line-height: 1.8 !important;",
+        "html, body":
+          "background: #0f172a !important; color: #e2e8f0 !important;",
+        body: "background: #0f172a !important;",
+        "p, li":
+          "color: #cbd5e1 !important; font-size: 17px !important; line-height: 1.8 !important;",
         "h1, h2, h3, h4": "color: #f1f5f9 !important;",
-        "a": "color: #7dd3fc !important;",
-        "table, td, th": "border-color: #1e293b !important; color: #cbd5e1 !important;",
+        a: "color: #7dd3fc !important;",
+        "table, td, th":
+          "border-color: #1e293b !important; color: #cbd5e1 !important;",
       },
       inject: [],
     },
@@ -121,7 +131,9 @@ async function fetchAuthConfig() {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.detail || "Could not load Auth0 config from backend");
+    throw new Error(
+      payload.detail || "Could not load Auth0 config from backend",
+    );
   }
 
   return payload;
@@ -181,12 +193,16 @@ export default function App() {
     try {
       const config = await fetchAuthConfig();
       if (!config.configured) {
-        throw new Error("Backend Auth0 config is incomplete. Add AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE.");
+        throw new Error(
+          "Backend Auth0 config is incomplete. Add AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE.",
+        );
       }
 
       const response = await sendRuntimeMessage({ type: "auth:login", config });
       setSession(response.session || null);
-      setStatus(`Signed in as ${(response.session?.user?.email || response.session?.user?.name || "user")}`);
+      setStatus(
+        `Signed in as ${response.session?.user?.email || response.session?.user?.name || "user"}`,
+      );
     } catch (err) {
       setError(err.message || "Sign-in failed");
     } finally {
@@ -220,15 +236,22 @@ export default function App() {
 
     try {
       const authSession = await requireSession();
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (!tab?.id) throw new Error("No active tab found");
 
       let snapshot;
       try {
-        const response = await chrome.tabs.sendMessage(tab.id, { type: "getSnapshot" });
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: "getSnapshot",
+        });
         snapshot = response.snapshot;
       } catch (e) {
-        throw new Error("Could not reach content script. Try refreshing the page.");
+        throw new Error(
+          "Could not reach content script. Try refreshing the page.",
+        );
       }
 
       const res = await fetch(`${BACKEND_URL}/transform`, {
@@ -270,9 +293,15 @@ export default function App() {
     try {
       await requireSession();
       const preset = PRESETS[name];
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (!tab?.id) throw new Error("No active tab found");
-      await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops: preset.ops });
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "applyOps",
+        ops: preset.ops,
+      });
       setActivePreset(name);
       setStatus(`${preset.icon} ${name} mode applied`);
       setLog(JSON.stringify(preset.ops, null, 2));
@@ -290,12 +319,19 @@ export default function App() {
       <div className="orb2" />
       <div className="app-container">
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <span
               style={{
                 fontSize: "22px",
                 fontWeight: "700",
-                background: "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
+                background:
+                  "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 letterSpacing: "-0.5px",
@@ -303,9 +339,20 @@ export default function App() {
             >
               I Browse
             </span>
-            <div className="live-dot" title={signedIn ? "Signed in" : "Signed out"} />
+            <div
+              className="live-dot"
+              title={signedIn ? "Signed in" : "Signed out"}
+            />
           </div>
-          <div style={{ fontSize: "11px", color: "#475569", letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: "500" }}>
+          <div
+            style={{
+              fontSize: "11px",
+              color: "#475569",
+              letterSpacing: "0.8px",
+              textTransform: "uppercase",
+              fontWeight: "500",
+            }}
+          >
             transform your web
           </div>
         </div>
@@ -323,14 +370,37 @@ export default function App() {
             border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#64748b",
+                  letterSpacing: "0.6px",
+                  textTransform: "uppercase",
+                  fontWeight: "600",
+                }}
+              >
                 Auth0 Access
               </div>
-              <div style={{ fontSize: "13px", color: signedIn ? "#e2e8f0" : "#94a3b8", lineHeight: 1.4 }}>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: signedIn ? "#e2e8f0" : "#94a3b8",
+                  lineHeight: 1.4,
+                }}
+              >
                 {signedIn
-                  ? (session.user?.email || session.user?.name || "Signed in")
+                  ? session.user?.email || session.user?.name || "Signed in"
                   : "Sign in before using presets or custom prompts."}
               </div>
             </div>
@@ -373,19 +443,44 @@ export default function App() {
             )}
           </div>
           {!signedIn && (
-            <div style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}>
-              Your Auth0 Universal Login can offer Google, GitHub, and email/password depending on the connections enabled in your Auth0 app.
+            <div
+              style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}
+            >
+              Your Auth0 Universal Login can offer Google, GitHub, and
+              email/password depending on the connections enabled in your Auth0
+              app.
             </div>
           )}
         </div>
 
         <div className="divider" />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", opacity: signedIn ? 1 : 0.5 }}>
-          <div style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            opacity: signedIn ? 1 : 0.5,
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              letterSpacing: "0.6px",
+              textTransform: "uppercase",
+              fontWeight: "600",
+            }}
+          >
             Quick Presets
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "8px",
+            }}
+          >
             {Object.entries(PRESETS).map(([name, preset]) => {
               const isActive = activePreset === name;
               const isHovered = hoveredPreset === name;
@@ -417,12 +512,24 @@ export default function App() {
                       : isHovered
                         ? "0 4px 16px rgba(0,0,0,0.2)"
                         : "none",
-                    transform: isHovered && !isActive && signedIn ? "translateY(-1px)" : "none",
+                    transform:
+                      isHovered && !isActive && signedIn
+                        ? "translateY(-1px)"
+                        : "none",
                     opacity: signedIn ? 1 : 0.65,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                    <span style={{ fontSize: "18px", lineHeight: 1 }}>{preset.icon}</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                    }}
+                  >
+                    <span style={{ fontSize: "18px", lineHeight: 1 }}>
+                      {preset.icon}
+                    </span>
                     {isActive && (
                       <span
                         style={{
@@ -489,8 +596,23 @@ export default function App() {
 
         <div className="divider" />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-          <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            flex: 1,
+          }}
+        >
+          <label
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              letterSpacing: "0.6px",
+              textTransform: "uppercase",
+              fontWeight: "600",
+            }}
+          >
             Custom Instruction
           </label>
           <textarea
@@ -511,20 +633,31 @@ export default function App() {
               backdropFilter: "blur(8px)",
               opacity: signedIn ? 1 : 0.6,
             }}
-            placeholder={signedIn ? 'e.g. "hide all MrBeast videos" or "make all text blue"' : "Sign in to unlock prompting"}
+            placeholder={
+              signedIn
+                ? 'e.g. "hide all MrBeast videos" or "make all text blue"'
+                : "Sign in to unlock prompting"
+            }
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleTransform();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
+                handleTransform();
             }}
             disabled={loading || !signedIn}
           />
-          <div style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}>
+          <div
+            style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}
+          >
             ⌘↵ to run
           </div>
         </div>
 
-        <button className="transform-btn" onClick={handleTransform} disabled={isDisabled}>
+        <button
+          className="transform-btn"
+          onClick={handleTransform}
+          disabled={isDisabled}
+        >
           {loading ? (
             <>
               <span className="spinner" />
@@ -533,7 +666,7 @@ export default function App() {
           ) : signedIn ? (
             "Transform →"
           ) : (
-            "Sign In To Transform"
+            "Sign In First"
           )}
         </button>
 
@@ -553,8 +686,19 @@ export default function App() {
 
         {log && (
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div className="log-header" onClick={() => setLogOpen((open) => !open)}>
-              <span style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+            <div
+              className="log-header"
+              onClick={() => setLogOpen((open) => !open)}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#64748b",
+                  letterSpacing: "0.6px",
+                  textTransform: "uppercase",
+                  fontWeight: "600",
+                }}
+              >
                 Ops JSON
               </span>
               <span

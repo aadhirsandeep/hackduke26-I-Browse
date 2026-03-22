@@ -15,7 +15,8 @@
         background: #080810;
         color: #e2e8f0;
         height: 100vh;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
       }
 
       #root { height: 100vh; }
@@ -108,6 +109,8 @@
         font-size: 15px;
         font-family: 'Space Grotesk', sans-serif;
         letter-spacing: 0.3px;
+        line-height: 1.2;
+        white-space: nowrap;
         transition: background-position 0.4s ease, box-shadow 0.2s ease, transform 0.1s ease;
         box-shadow: 0 4px 24px rgba(99,102,241,0.3);
       }
@@ -225,12 +228,13 @@
       .app-container {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        min-height: 100vh;
         padding: 20px 16px 16px;
         gap: 14px;
         position: relative;
         z-index: 1;
         animation: fade-up 0.4s ease forwards;
+        overflow-y: auto;
       }
     </style>
   </head>
