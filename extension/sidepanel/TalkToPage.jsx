@@ -1,11 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-
-function authHeaders(accessToken) {
-  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
-}
+const ELEVENLABS_API_KEY = "sk_ce781fbefe729976f84005e9b25c534e65081973bd176b39";
+const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"; // ElevenLabs "George" voice
 
 async function getPageText() {
   try {
@@ -39,31 +35,13 @@ async function applyOps(ops) {
   } catch {}
 }
 
-async function getAnalyticsContext() {
-  try {
-    const local = await chrome.storage.local.get(["ibrowse_temp_user_id", "ibrowse_client_instance_id"]);
-    const session = await (chrome.storage.session ?? chrome.storage.local).get(["ibrowse_session_id"]);
-    return {
-      temporary_user_id: local.ibrowse_temp_user_id || null,
-      client_instance_id: local.ibrowse_client_instance_id || null,
-      session_id: session.ibrowse_session_id || null,
-    };
-  } catch {
-    return { temporary_user_id: null, client_instance_id: null, session_id: null };
-  }
-}
-
-async function handleVoiceCommand(message, pageContext, accessToken) {
-  console.log("[TalkToPage] handleVoiceCommand start, fetching classify...");
-  // First ask Gemini to classify: is this a page transform or a question?
-  const classifyRes = await fetch(`${BACKEND_URL}/chat`, {
+async function handleCommand(message, pageContext) {
+  // Classify: transform or question
+  const classifyRes = await fetch("http://localhost:8000/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(accessToken),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: `Classify this user command as either "transform" (modify/change/remove/hide/add something on the page) or "question" (asking for info/explanation). Reply with only one word: transform or question.\n\nCommand: "${message}"`,
+      message: `Classify this user command as either "transform" (modify/change/remove/hide/add/restyle something on the page) or "question" (asking for info). Reply with ONLY one word: transform or question.\n\nCommand: "${message}"`,
       page_context: "",
     }),
   });
@@ -74,41 +52,22 @@ async function handleVoiceCommand(message, pageContext, accessToken) {
   if (isTransform) {
     const snapshot = await getSnapshot();
     if (!snapshot) throw new Error("Could not read the page. Try refreshing.");
-
-    const analyticsCtx = await getAnalyticsContext();
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => [null]);
-
-    const transformRes = await fetch(`${BACKEND_URL}/transform`, {
+    const transformRes = await fetch("http://localhost:8000/transform", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders(accessToken),
-      },
-      body: JSON.stringify({
-        prompt: message,
-        snapshot,
-        ...analyticsCtx,
-        page_url: tab?.url || null,
-        browser_info: navigator.userAgent,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: message, snapshot }),
     });
     if (!transformRes.ok) throw new Error(`Transform error ${transformRes.status}`);
     const ops = await transformRes.json();
     await applyOps(ops);
-
     const affected = (ops.hide?.length || 0) + (ops.remove?.length || 0) + (ops.restyle ? Object.keys(ops.restyle).length : 0) + (ops.inject?.length || 0);
-
-
-    return affected > 0 ? `Done! I've applied your changes to the page.` : "I tried but couldn't find matching elements on this page.";
+    return affected > 0 ? "Done! I've applied your changes to the page." : "I tried but couldn't find matching elements on this page.";
   }
 
   // Otherwise answer as a question
-  const res = await fetch(`${BACKEND_URL}/chat`, {
+  const res = await fetch("http://localhost:8000/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(accessToken),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, page_context: pageContext }),
   });
   if (!res.ok) throw new Error(`Backend error ${res.status}`);
@@ -117,7 +76,7 @@ async function handleVoiceCommand(message, pageContext, accessToken) {
 }
 
 async function speakWithElevenLabs(text) {
-  const res = await fetch(`${BACKEND_URL}/tts`, {
+  const res = await fetch("http://localhost:8000/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -134,7 +93,7 @@ async function speakWithElevenLabs(text) {
   URL.revokeObjectURL(url);
 }
 
-export default function TalkToPage({ accessToken }) {
+export default function TalkToPage() {
   const [status, setStatus] = useState("idle"); // idle | listening | thinking | speaking
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
@@ -151,10 +110,9 @@ export default function TalkToPage({ accessToken }) {
     setMessages((p) => [...p, { id: Date.now() + Math.random(), source, text }]);
 
   const stopListening = useCallback(() => {
-    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current?.stop();
     recognitionRef.current = null;
     setStatus("idle");
-    setError("");
   }, []);
 
   const startListening = useCallback(async () => {
@@ -180,10 +138,7 @@ export default function TalkToPage({ accessToken }) {
       setStatus("thinking");
 
       try {
-        const reply = await Promise.race([
-          handleVoiceCommand(transcript, pageContextRef.current, accessToken),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out — backend may be down")), 40000)),
-        ]);
+        const reply = await handleCommand(transcript, pageContextRef.current);
         addMessage("ai", reply);
         setStatus("speaking");
         await speakWithElevenLabs(reply);
@@ -209,9 +164,9 @@ export default function TalkToPage({ accessToken }) {
   }, []);
 
   const handleToggle = useCallback(() => {
-    if (status !== "idle") { stopListening(); return; }
+    if (isActive) { stopListening(); return; }
     startListening();
-  }, [status, startListening, stopListening]);
+  }, [isActive, startListening, stopListening]);
 
   const statusLabel = { idle: "Click to speak", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…" }[status];
   const statusColor = { idle: "#475569", listening: "#67e8f9", thinking: "#a5b4fc", speaking: "#c4b5fd" }[status];
@@ -226,11 +181,12 @@ export default function TalkToPage({ accessToken }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
         <button
           onClick={handleToggle}
+          disabled={status === "thinking" || status === "speaking"}
           style={{
             width: "64px", height: "64px", borderRadius: "50%",
             border: isActive ? `2px solid ${statusColor}` : "2px solid rgba(103,232,249,0.2)",
             background: isActive ? `${statusColor}18` : "rgba(255,255,255,0.04)",
-            cursor: "pointer",
+            cursor: (status === "thinking" || status === "speaking") ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             transition: "all 0.25s ease",
             boxShadow: status === "listening" ? `0 0 28px ${statusColor}66` : isActive ? `0 0 16px ${statusColor}44` : "none",
