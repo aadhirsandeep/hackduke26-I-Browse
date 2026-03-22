@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from "react";
 import TalkToPage from "./TalkToPage";
-import { BACKEND_URL } from "./config.js";
-import {
-  buildDashboardUrl,
-  ensureAnalyticsContext,
-  logClientTransformEvent,
-} from "./analytics.js";
+
+const BACKEND_URL = "http://localhost:8000";
 
 const PRESETS = {
   Reader: {
@@ -21,12 +17,15 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #fafaf8 !important; color: #1a1a1a !important;",
-        "body": "max-width: 740px !important; margin: 0 auto !important; padding: 32px 24px !important; font-size: 18px !important; line-height: 1.85 !important;",
-        "p, li, blockquote": "font-size: 18px !important; line-height: 1.85 !important; color: #222 !important;",
-        "h1, h2, h3, h4": "font-family: Georgia, serif !important; color: #111 !important; line-height: 1.3 !important;",
-        "img": "max-width: 100% !important; height: auto !important; border-radius: 8px !important;",
-        "a": "color: #b45309 !important;",
+        "html, body":
+          "background: #fafaf8 !important; color: #1a1a1a !important;",
+        body: "max-width: 740px !important; margin: 0 auto !important; padding: 32px 24px !important; font-size: 18px !important; line-height: 1.85 !important;",
+        "p, li, blockquote":
+          "font-size: 18px !important; line-height: 1.85 !important; color: #222 !important;",
+        "h1, h2, h3, h4":
+          "font-family: Georgia, serif !important; color: #111 !important; line-height: 1.3 !important;",
+        img: "max-width: 100% !important; height: auto !important; border-radius: 8px !important;",
+        a: "color: #b45309 !important;",
       },
       inject: [],
     },
@@ -44,13 +43,15 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #09090b !important; color: #e4e4e7 !important;",
-        "body": "background: #09090b !important;",
-        "a": "color: #a78bfa !important;",
-        "img": "filter: brightness(0.88) contrast(1.05) !important; border-radius: 6px !important;",
+        "html, body":
+          "background: #09090b !important; color: #e4e4e7 !important;",
+        body: "background: #09090b !important;",
+        a: "color: #a78bfa !important;",
+        img: "filter: brightness(0.88) contrast(1.05) !important; border-radius: 6px !important;",
         "h1, h2, h3, h4, h5, h6": "color: #fafafa !important;",
         "p, li, td, th, span": "color: #d4d4d8 !important;",
-        "input, textarea, select": "background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important;",
+        "input, textarea, select":
+          "background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important;",
       },
       inject: [],
     },
@@ -68,11 +69,13 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #f5f0eb !important; color: #3d3530 !important;",
-        "body": "font-size: 17px !important; line-height: 1.8 !important; letter-spacing: 0.015em !important;",
+        "html, body":
+          "background: #f5f0eb !important; color: #3d3530 !important;",
+        body: "font-size: 17px !important; line-height: 1.8 !important; letter-spacing: 0.015em !important;",
         "img, video": "filter: saturate(0.5) brightness(1.02) !important;",
-        "a": "color: #6b5a4e !important;",
-        "h1, h2, h3, h4": "color: #2d2520 !important; font-weight: 600 !important;",
+        a: "color: #6b5a4e !important;",
+        "h1, h2, h3, h4":
+          "color: #2d2520 !important; font-weight: 600 !important;",
         "p, li": "color: #3d3530 !important;",
       },
       inject: [],
@@ -91,21 +94,57 @@ const PRESETS = {
       remove: [],
       hide: [],
       restyle: {
-        "html, body": "background: #0f172a !important; color: #e2e8f0 !important;",
-        "body": "background: #0f172a !important;",
-        "p, li": "color: #cbd5e1 !important; font-size: 17px !important; line-height: 1.8 !important;",
+        "html, body":
+          "background: #0f172a !important; color: #e2e8f0 !important;",
+        body: "background: #0f172a !important;",
+        "p, li":
+          "color: #cbd5e1 !important; font-size: 17px !important; line-height: 1.8 !important;",
         "h1, h2, h3, h4": "color: #f1f5f9 !important;",
-        "a": "color: #7dd3fc !important;",
-        "table, td, th": "border-color: #1e293b !important; color: #cbd5e1 !important;",
+        a: "color: #7dd3fc !important;",
+        "table, td, th":
+          "border-color: #1e293b !important; color: #cbd5e1 !important;",
       },
       inject: [],
     },
   },
 };
 
+function sendRuntimeMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      if (response?.error) {
+        reject(new Error(response.error));
+        return;
+      }
+
+      resolve(response);
+    });
+  });
+}
+
+async function fetchAuthConfig() {
+  const response = await fetch(`${BACKEND_URL}/auth/config`);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      payload.detail || "Could not load Auth0 config from backend",
+    );
+  }
+
+  return payload;
+}
+
 export default function App() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [session, setSession] = useState(null);
   const [log, setLog] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -114,53 +153,78 @@ export default function App() {
   const [hoveredPreset, setHoveredPreset] = useState(null);
 
   useEffect(() => {
-    void ensureAnalyticsContext();
+    let mounted = true;
+
+    async function loadSession() {
+      try {
+        const response = await sendRuntimeMessage({ type: "auth:getSession" });
+        if (mounted) setSession(response.session || null);
+      } catch (err) {
+        if (mounted) setError(err.message || "Could not read auth session");
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
+    }
+
+    loadSession();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const ensureContentScriptReady = async (tab) => {
-    console.debug("I Browse: ensureContentScriptReady", { tabId: tab?.id, url: tab?.url });
+  const refreshSession = async () => {
+    const response = await sendRuntimeMessage({ type: "auth:getSession" });
+    setSession(response.session || null);
+    return response.session || null;
+  };
 
-    if (!tab?.id) {
-      throw new Error("No active tab found");
+  const requireSession = async () => {
+    const currentSession = session || (await refreshSession());
+    if (!currentSession?.accessToken) {
+      throw new Error("Sign in with Auth0 before transforming a page");
     }
+    return currentSession;
+  };
 
-    const tabUrl = tab.url || "";
-    const unsupportedUrl =
-      tabUrl.startsWith("chrome://") ||
-      tabUrl.startsWith("chrome-extension://") ||
-      tabUrl.startsWith("edge://") ||
-      tabUrl.startsWith("about:");
-
-    if (unsupportedUrl) {
-      throw new Error("I Browse cannot run on this browser page. Open a normal website tab and try again.");
-    }
+  const handleLogin = async () => {
+    setAuthLoading(true);
+    setError("");
+    setStatus("");
 
     try {
-      console.debug("I Browse: pinging content script", tab.id);
-      await chrome.tabs.sendMessage(tab.id, { type: "ping" });
-      console.debug("I Browse: content script already connected", tab.id);
-      return;
-    } catch (error) {
-      console.warn("I Browse: content script ping failed, attempting injection", error);
+      const config = await fetchAuthConfig();
+      if (!config.configured) {
+        throw new Error(
+          "Backend Auth0 config is incomplete. Add AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE.",
+        );
+      }
+
+      const response = await sendRuntimeMessage({ type: "auth:login", config });
+      setSession(response.session || null);
+      setStatus(
+        `Signed in as ${response.session?.user?.email || response.session?.user?.name || "user"}`,
+      );
+    } catch (err) {
+      setError(err.message || "Sign-in failed");
+    } finally {
+      setAuthLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    setAuthLoading(true);
+    setError("");
+    setStatus("");
 
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content_script.js"],
-      });
-      console.debug("I Browse: content script injected", tab.id);
-    } catch (error) {
-      console.error("I Browse: content script injection failed", error);
-      throw new Error("Content script is unavailable for this tab. Refresh the page once and try again.");
-    }
-
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: "ping" });
-      console.debug("I Browse: content script connected after injection", tab.id);
-    } catch (error) {
-      console.error("I Browse: content script still unreachable after injection", error);
-      throw new Error("I Browse needs this page refreshed after extension reload. Refresh the tab and try again.");
+      await sendRuntimeMessage({ type: "auth:logout" });
+      setSession(null);
+      setActivePreset(null);
+      setStatus("Signed out");
+    } catch (err) {
+      setError(err.message || "Sign-out failed");
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -172,151 +236,252 @@ export default function App() {
     setError("");
 
     try {
-      console.debug("I Browse: transform click");
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      console.debug("I Browse: active tab resolved", tab);
+      const authSession = await requireSession();
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (!tab?.id) throw new Error("No active tab found");
-      const analyticsContext = await ensureAnalyticsContext();
-      console.debug("I Browse: analytics context ready", analyticsContext);
-      await ensureContentScriptReady(tab);
 
       let snapshot;
       try {
-        console.debug("I Browse: requesting snapshot", tab.id);
-        const response = await chrome.tabs.sendMessage(tab.id, { type: "getSnapshot" });
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: "getSnapshot",
+        });
         snapshot = response.snapshot;
-        console.debug("I Browse: snapshot collected", snapshot?.length ?? 0);
       } catch (e) {
-        console.error("I Browse: snapshot request failed", e);
-        throw new Error("Could not reach the page script. Refresh the tab and try again.");
+        throw new Error(
+          "Could not reach content script. Try refreshing the page.",
+        );
       }
 
-      console.debug("I Browse: sending /transform request");
-      console.debug("I Browse: /transform payload", {
-        temporary_user_id: analyticsContext.temporaryUserId,
-        client_instance_id: analyticsContext.clientInstanceId,
-        session_id: analyticsContext.sessionId,
-        page_url: tab.url,
-        prompt: prompt.trim(),
-        snapshot_node_count: snapshot?.length ?? 0,
-      });
       const res = await fetch(`${BACKEND_URL}/transform`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          snapshot,
-          temporary_user_id: analyticsContext.temporaryUserId,
-          client_instance_id: analyticsContext.clientInstanceId,
-          session_id: analyticsContext.sessionId,
-          page_url: tab.url,
-          browser_info: analyticsContext.browserInfo,
-          preset_used: null,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authSession.accessToken}`,
+        },
+        body: JSON.stringify({ prompt: prompt.trim(), snapshot }),
       });
+
+      if (res.status === 401) {
+        setSession(null);
+        await sendRuntimeMessage({ type: "auth:logout" });
+        throw new Error("Your session expired. Sign in again to continue.");
+      }
 
       if (!res.ok) {
         const text = await res.text();
-        console.warn("I Browse: /transform returned error", res.status, text);
         throw new Error(`Backend error ${res.status}: ${text}`);
       }
 
       const ops = await res.json();
-      console.debug("I Browse: /transform success", ops);
       setLog(JSON.stringify(ops, null, 2));
       await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops });
       setStatus("Applied successfully");
     } catch (err) {
-      console.error("I Browse: transform failed", err);
       setError(err.message || "Unknown error");
     } finally {
-      console.debug("I Browse: transform flow complete");
       setLoading(false);
     }
   };
 
   const handlePreset = async (name) => {
-    const preset = PRESETS[name];
     setError("");
     setStatus("");
     setLog("");
-    const startedAt = performance.now();
+
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await requireSession();
+      const preset = PRESETS[name];
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (!tab?.id) throw new Error("No active tab found");
-      const analyticsContext = await ensureAnalyticsContext();
-      await ensureContentScriptReady(tab);
-      await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops: preset.ops });
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "applyOps",
+        ops: preset.ops,
+      });
       setActivePreset(name);
       setStatus(`${preset.icon} ${name} mode applied`);
       setLog(JSON.stringify(preset.ops, null, 2));
-      void logClientTransformEvent({
-        context: analyticsContext,
-        pageUrl: tab.url,
-        prompt: `Apply ${name} preset`,
-        presetUsed: name,
-        status: "success",
-        ops: preset.ops,
-        latencyMs: Math.round(performance.now() - startedAt),
-      });
     } catch (err) {
-      const analyticsContext = await ensureAnalyticsContext();
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      void logClientTransformEvent({
-        context: analyticsContext,
-        pageUrl: tab?.url,
-        prompt: `Apply ${name} preset`,
-        presetUsed: name,
-        status: "failed",
-        ops: preset.ops,
-        latencyMs: Math.round(performance.now() - startedAt),
-        errorMessage: err.message || "Unknown error",
-      });
       setError(err.message || "Unknown error");
     }
   };
 
-  const handleOpenDashboard = async () => {
-    const analyticsContext = await ensureAnalyticsContext();
-    await chrome.tabs.create({ url: buildDashboardUrl(analyticsContext.temporaryUserId) });
-  };
-
-  const isDisabled = loading || !prompt.trim();
+  const signedIn = Boolean(session?.accessToken);
+  const isDisabled = loading || !prompt.trim() || !signedIn;
 
   return (
     <>
       <div className="orb" />
       <div className="orb2" />
       <div className="app-container">
-
-        {/* Header */}
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{
-              fontSize: "22px",
-              fontWeight: "700",
-              background: "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              letterSpacing: "-0.5px",
-            }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "22px",
+                fontWeight: "700",
+                background:
+                  "linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                letterSpacing: "-0.5px",
+              }}
+            >
               I Browse
             </span>
-            <div className="live-dot" title="Active" />
+            <div
+              className="live-dot"
+              title={signedIn ? "Signed in" : "Signed out"}
+            />
           </div>
-          <div style={{ fontSize: "11px", color: "#475569", letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: "500" }}>
+          <div
+            style={{
+              fontSize: "11px",
+              color: "#475569",
+              letterSpacing: "0.8px",
+              textTransform: "uppercase",
+              fontWeight: "500",
+            }}
+          >
             transform your web
           </div>
         </div>
 
         <div className="divider" />
 
-        {/* Preset buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            padding: "12px",
+            borderRadius: "14px",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#64748b",
+                  letterSpacing: "0.6px",
+                  textTransform: "uppercase",
+                  fontWeight: "600",
+                }}
+              >
+                Auth0 Access
+              </div>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: signedIn ? "#e2e8f0" : "#94a3b8",
+                  lineHeight: 1.4,
+                }}
+              >
+                {signedIn
+                  ? session.user?.email || session.user?.name || "Signed in"
+                  : "Sign in before using presets or custom prompts."}
+              </div>
+            </div>
+            {signedIn ? (
+              <button
+                onClick={handleLogout}
+                disabled={authLoading}
+                style={{
+                  padding: "9px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(248,113,113,0.25)",
+                  background: "rgba(127,29,29,0.18)",
+                  color: "#fecaca",
+                  cursor: authLoading ? "not-allowed" : "pointer",
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                }}
+              >
+                Sign Out
+              </button>
+            ) : (
+              <button
+                onClick={handleLogin}
+                disabled={authLoading}
+                style={{
+                  padding: "9px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(103,232,249,0.28)",
+                  background: "rgba(8,145,178,0.16)",
+                  color: "#67e8f9",
+                  cursor: authLoading ? "not-allowed" : "pointer",
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                }}
+              >
+                {authLoading ? "Checking..." : "Sign In"}
+              </button>
+            )}
+          </div>
+          {!signedIn && (
+            <div
+              style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}
+            >
+              Your Auth0 Universal Login can offer Google, GitHub, and
+              email/password depending on the connections enabled in your Auth0
+              app.
+            </div>
+          )}
+        </div>
+
+        <div className="divider" />
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            opacity: signedIn ? 1 : 0.5,
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              letterSpacing: "0.6px",
+              textTransform: "uppercase",
+              fontWeight: "600",
+            }}
+          >
             Quick Presets
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "8px",
+            }}
+          >
             {Object.entries(PRESETS).map(([name, preset]) => {
               const isActive = activePreset === name;
               const isHovered = hoveredPreset === name;
@@ -326,6 +491,7 @@ export default function App() {
                   onClick={() => handlePreset(name)}
                   onMouseEnter={() => setHoveredPreset(name)}
                   onMouseLeave={() => setHoveredPreset(null)}
+                  disabled={!signedIn}
                   style={{
                     display: "flex",
                     flexDirection: "column",
@@ -339,7 +505,7 @@ export default function App() {
                         : "rgba(255,255,255,0.025)",
                     border: `1px solid ${isActive ? preset.accentBorder : isHovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
                     borderRadius: "12px",
-                    cursor: "pointer",
+                    cursor: signedIn ? "pointer" : "not-allowed",
                     transition: "all 0.18s ease",
                     textAlign: "left",
                     boxShadow: isActive
@@ -347,73 +513,107 @@ export default function App() {
                       : isHovered
                         ? "0 4px 16px rgba(0,0,0,0.2)"
                         : "none",
-                    transform: isHovered && !isActive ? "translateY(-1px)" : "none",
+                    transform:
+                      isHovered && !isActive && signedIn
+                        ? "translateY(-1px)"
+                        : "none",
+                    opacity: signedIn ? 1 : 0.65,
                   }}
                 >
-                  {/* Top row: icon + active indicator */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                    <span style={{ fontSize: "18px", lineHeight: 1 }}>{preset.icon}</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                    }}
+                  >
+                    <span style={{ fontSize: "18px", lineHeight: 1 }}>
+                      {preset.icon}
+                    </span>
                     {isActive && (
-                      <span style={{
-                        width: "6px", height: "6px", borderRadius: "50%",
-                        background: preset.accent,
-                        boxShadow: `0 0 6px ${preset.accent}`,
-                        flexShrink: 0,
-                      }} />
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          background: preset.accent,
+                          boxShadow: `0 0 6px ${preset.accent}`,
+                          flexShrink: 0,
+                        }}
+                      />
                     )}
                   </div>
-                  {/* Label */}
-                  <div style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    color: isActive ? preset.accent : "#e2e8f0",
-                    transition: "color 0.18s",
-                  }}>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      color: isActive ? preset.accent : "#e2e8f0",
+                      transition: "color 0.18s",
+                    }}
+                  >
                     {preset.label}
                   </div>
-                  {/* Description */}
-                  <div style={{
-                    fontSize: "10.5px",
-                    color: "#475569",
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    lineHeight: 1.3,
-                  }}>
+                  <div
+                    style={{
+                      fontSize: "10.5px",
+                      color: "#475569",
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      lineHeight: 1.3,
+                    }}
+                  >
                     {preset.description}
                   </div>
-                  {/* Demo site hint */}
-                  <div style={{
-                    fontSize: "10px",
-                    color: isActive ? preset.accent : "#334155",
-                    fontFamily: "monospace",
-                    letterSpacing: "0.2px",
-                    transition: "color 0.18s",
-                    opacity: isHovered || isActive ? 1 : 0.7,
-                  }}>
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      color: isActive ? preset.accent : "#334155",
+                      fontFamily: "monospace",
+                      letterSpacing: "0.2px",
+                      transition: "color 0.18s",
+                      opacity: isHovered || isActive ? 1 : 0.7,
+                    }}
+                  >
                     {preset.demo}
                   </div>
                 </button>
               );
             })}
           </div>
-          {/* Hint text that changes based on hovered preset */}
-          <div style={{
-            fontSize: "11px",
-            color: "#334155",
-            textAlign: "center",
-            minHeight: "16px",
-            transition: "opacity 0.2s",
-            opacity: hoveredPreset ? 1 : 0,
-          }}>
+          <div
+            style={{
+              fontSize: "11px",
+              color: "#334155",
+              textAlign: "center",
+              minHeight: "16px",
+              transition: "opacity 0.2s",
+              opacity: hoveredPreset ? 1 : 0,
+            }}
+          >
             {hoveredPreset ? PRESETS[hoveredPreset].demoHint : ""}
           </div>
         </div>
 
         <div className="divider" />
 
-        {/* Prompt area */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-          <label style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            flex: 1,
+          }}
+        >
+          <label
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              letterSpacing: "0.6px",
+              textTransform: "uppercase",
+              fontWeight: "600",
+            }}
+          >
             Custom Instruction
           </label>
           <textarea
@@ -432,21 +632,28 @@ export default function App() {
               lineHeight: "1.6",
               transition: "border-color 0.2s, box-shadow 0.2s",
               backdropFilter: "blur(8px)",
+              opacity: signedIn ? 1 : 0.6,
             }}
-            placeholder='e.g. "hide all MrBeast videos" or "make all text blue"'
+            placeholder={
+              signedIn
+                ? 'e.g. "hide all MrBeast videos" or "make all text blue"'
+                : "Sign in to unlock prompting"
+            }
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleTransform();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
+                handleTransform();
             }}
-            disabled={loading}
+            disabled={loading || !signedIn}
           />
-          <div style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}>
+          <div
+            style={{ fontSize: "11px", color: "#334155", textAlign: "right" }}
+          >
             ⌘↵ to run
           </div>
         </div>
 
-        {/* Transform button */}
         <button
           className="transform-btn"
           onClick={handleTransform}
@@ -455,33 +662,15 @@ export default function App() {
           {loading ? (
             <>
               <span className="spinner" />
-              Analyzing page…
+              Analyzing page...
             </>
-          ) : (
+          ) : signedIn ? (
             "Transform →"
+          ) : (
+            "Sign In First"
           )}
         </button>
 
-        <button
-          onClick={handleOpenDashboard}
-          style={{
-            width: "100%",
-            padding: "11px 14px",
-            border: "1px solid rgba(103,232,249,0.22)",
-            background: "rgba(103,232,249,0.08)",
-            color: "#67e8f9",
-            borderRadius: "12px",
-            fontSize: "13px",
-            fontWeight: "600",
-            cursor: "pointer",
-            letterSpacing: "0.2px",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          Open Dashboard
-        </button>
-
-        {/* Status */}
         {status && (
           <div className="status-badge success">
             <span style={{ fontSize: "16px" }}>✦</span>
@@ -496,20 +685,36 @@ export default function App() {
           </div>
         )}
 
-        {/* Log */}
         {log && (
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div className="log-header" onClick={() => setLogOpen((o) => !o)}>
-              <span style={{ fontSize: "11px", color: "#64748b", letterSpacing: "0.6px", textTransform: "uppercase", fontWeight: "600" }}>
+            <div
+              className="log-header"
+              onClick={() => setLogOpen((open) => !open)}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "#64748b",
+                  letterSpacing: "0.6px",
+                  textTransform: "uppercase",
+                  fontWeight: "600",
+                }}
+              >
                 Ops JSON
               </span>
-              <span style={{ fontSize: "12px", color: "#475569", transition: "transform 0.2s", display: "inline-block", transform: logOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "#475569",
+                  transition: "transform 0.2s",
+                  display: "inline-block",
+                  transform: logOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                }}
+              >
                 ▾
               </span>
             </div>
-            {logOpen && (
-              <div className="log-box">{log}</div>
-            )}
+            {logOpen && <div className="log-box">{log}</div>}
           </div>
         )}
 
