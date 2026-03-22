@@ -1,105 +1,84 @@
-# I Browse
+## Dashboard Local Setup
 
-A Chrome extension that lets users transform any webpage using natural language instructions, powered by Google Gemini.
+Install dashboard dependencies:
 
-## What it does
-
-The user types a prompt in the side panel (e.g. "hide all MrBeast videos" or "make this page easier to read") and the extension applies DOM transformations to the live page in real time — no page reload required.
-
-## Architecture
-
-```
-Chrome Extension (MV3)
-├── background.js         — opens side panel on icon click
-├── content_script.js     — injected into all pages; collects DOM snapshot, applies ops
-└── panel/                — built React side panel (Vite output)
-
-sidepanel/ (React/Vite source)
-└── App.jsx               — UI: prompt input, preset buttons, status/log display
-
-backend/ (Python)
-├── main.py               — FastAPI server, calls Gemini, returns ops JSON
-└── requirements.txt
+```bash
+cd dashboard
+npm install
 ```
 
-## Flow
+Run the dashboard locally:
 
-1. User types a prompt in the side panel
-2. Side panel sends `getSnapshot` to the content script — returns the top 300 meaningful DOM elements (tag, id, class, aria-label, href, text)
-3. Side panel POSTs `{ prompt, snapshot }` to `http://localhost:8000/transform`
-4. FastAPI sends the prompt + snapshot to Gemini (`gemini-flash-latest`) and gets back a structured JSON instruction object
-5. Side panel sends `{ type: "applyOps", ops }` to the content script
-6. Content script executes ops in order: **restyle → inject → hide → remove**
-7. Changed elements flash green (added/restyled) or red (hidden/removed) as visual diff feedback
-
-## DOM Instruction Schema
-
-Gemini always returns exactly this shape:
-
-```json
-{
-  "remove": ["css selectors"],
-  "hide": ["css selectors"],
-  "restyle": { "selector": "css string" },
-  "inject": [{ "tag": "div", "id": "id", "text": "text", "css": "inline css" }]
-}
+```bash
+npm run dev -- --host 127.0.0.1
 ```
 
-- `hide` — sets `display: none`, preferred over remove
-- `remove` — calls `element.remove()`
-- `restyle` — injects a `<style>` tag into the page head
-- `inject` — creates and appends new DOM elements; supports a `payload` field for raw HTML
+Local dashboard URL:
 
-## Quick Presets
+```text
+http://127.0.0.1:4173/
+```
 
-Four one-click presets that apply hardcoded ops with no API call:
+Notes:
+- The extension `Open Dashboard` button only works while the local dashboard server is running.
+- After changing or rebuilding the extension sidepanel, reload the unpacked extension in `chrome://extensions`.
 
-| Preset | Effect | Best on |
-|--------|--------|---------|
-| Reader | Comfortable reading typography, max-width body | Wikipedia, Medium |
-| Cinematic | Full dark mode via CSS color overrides | Wikipedia, news sites |
-| Sensory | Warm muted palette, desaturated images | Any article page |
-| Focus | Dark navy background, spotlight content area | Wikipedia, The Verge |
+## Supabase Analytics Setup
 
-## Stack
+1. Copy `.env.example` to `.env` in the repo root and fill in:
+   - `GEMINI_API_KEY`
+   - `GEMINI_ESTIMATED_COST_PER_1K_TOKENS_USD`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+2. Apply the SQL in `supabase/schema.sql` using the Supabase SQL editor.
+3. Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only. The extension and dashboard should never receive it.
+4. The backend currently uses the model alias `gemini-flash-latest`, so `GEMINI_ESTIMATED_COST_PER_1K_TOKENS_USD` is intentionally a project-managed estimate for rough dashboard cost reporting.
+5. The current dashboard reads analytics for the temporary local user id passed from the extension. This is a temporary dev-mode bridge until Auth0 user ids are wired in.
 
-- **Extension**: Manifest V3, vanilla JS content/background scripts
-- **UI**: React 18 + Vite 5, built into `extension/panel/`
-- **Backend**: Python FastAPI + `google-genai` SDK
-- **AI**: `gemini-flash-latest` via Google Gemini API
+Start the backend:
 
-## Setup
-
-### Backend
-
-```powershell
+```bash
 cd backend
-pip install -r requirements.txt
-$env:GEMINI_API_KEY="your_key_here"
-uvicorn main:app --reload --port 8000
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-### Side Panel (build)
+Start the dashboard:
 
-```powershell
+```bash
+cd dashboard
+npm install
+npm run dev -- --host 127.0.0.1
+```
+
+If you changed extension sidepanel source and need a rebuild:
+
+```bash
 cd extension/sidepanel
 npm install
 npm run build
-# outputs to extension/panel/
 ```
 
-### Load Extension
+Then reload the unpacked extension in `chrome://extensions`.
 
-1. Go to `chrome://extensions`
-2. Enable Developer Mode
-3. Click "Load unpacked" → select the `extension/` folder
-4. Click the I Browse icon in the toolbar to open the side panel
+## Supabase Analytics Quick Test
 
-## Notes for LLMs
-
-- The content script runs in the page context and communicates with the side panel via `chrome.tabs.sendMessage`
-- The side panel is a Chrome side panel (not a popup) — it persists across navigation
-- Presets apply ops directly without hitting the backend
-- `restyle` ops inject a `<style>` tag — they stack and are not reversible without a page reload
-- The snapshot deliberately skips pure container divs to keep token usage low
-- `gemini-flash-latest` is used because `gemini-2.0-flash` and `gemini-2.5-flash` are unavailable on the free tier API key in use
+1. Fill `.env` with real Supabase and Gemini values.
+2. Run `supabase/schema.sql` in your Supabase project.
+3. Restart the backend after setting env vars.
+4. Restart the dashboard after setting env vars.
+5. Open `http://127.0.0.1:4173/` or click `Open Dashboard` from the extension.
+6. Reload the unpacked extension in `chrome://extensions` if you rebuilt the sidepanel.
+7. On a normal webpage, open the extension and run one custom transform or one preset.
+8. Confirm the transform still works even if analytics logging has an issue.
+9. Refresh the dashboard and verify:
+   - a `users` row exists for the temporary local identity
+   - a `browser_sessions` row exists for the current session
+   - one or more `transform_events` rows exist
+   - Recent Transformations and the derived dashboard sections populate
+10. If no rows appear, verify:
+   - backend has `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+   - dashboard has `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+   - backend and dashboard were restarted after updating `.env`

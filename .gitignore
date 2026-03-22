@@ -1,0 +1,23 @@
+# Node / frontend dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+.vite/
+coverage/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local environment files
+.env
+.env.*
+
+# OS / editor noise
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
