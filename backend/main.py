@@ -5,6 +5,11 @@ from pathlib import Path
 from threading import Thread
 from time import perf_counter
 from typing import Any
+from dotenv import load_dotenv
+
+# Load .env before any module that reads env vars at import time (e.g. analytics lru_cache)
+ROOT_ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(ROOT_ENV_PATH)
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -13,7 +18,6 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
 try:
     from .analytics import (
@@ -34,8 +38,6 @@ except ImportError:
         summarize_ops,
     )
 
-ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(ROOT_ENV_PATH)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ibrowse.backend")
 logger.info("loading env from %s", ROOT_ENV_PATH)
