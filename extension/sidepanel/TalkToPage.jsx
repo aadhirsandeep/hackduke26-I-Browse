@@ -7,7 +7,10 @@ async function getPageText() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return "";
-    const res = await chrome.tabs.sendMessage(tab.id, { type: "getPageText" });
+    const res = await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { type: "getPageText" }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500)),
+    ]);
     return res?.text || "";
   } catch { return ""; }
 }
@@ -129,11 +132,12 @@ export default function TalkToPage() {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
         <button
           onClick={handleToggle}
+          disabled={status === "thinking" || status === "speaking"}
           style={{
             width: "64px", height: "64px", borderRadius: "50%",
             border: isActive ? `2px solid ${statusColor}` : "2px solid rgba(103,232,249,0.2)",
             background: isActive ? `${statusColor}18` : "rgba(255,255,255,0.04)",
-            cursor: "pointer",
+            cursor: (status === "thinking" || status === "speaking") ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             transition: "all 0.25s ease",
             boxShadow: status === "listening" ? `0 0 28px ${statusColor}66` : isActive ? `0 0 16px ${statusColor}44` : "none",

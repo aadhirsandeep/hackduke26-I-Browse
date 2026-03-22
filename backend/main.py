@@ -116,7 +116,7 @@ async def auth_config():
 
 
 @app.post("/transform")
-async def transform(req: TransformRequest, claims: dict[str, Any] = Depends(require_access_token)):
+async def transform(req: TransformRequest, claims: dict[str, Any] = Depends(lambda authorization=Header(default=None): require_access_token(authorization) if authorization else {})):
     snapshot_text = build_snapshot_text(req.snapshot)
     user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
 

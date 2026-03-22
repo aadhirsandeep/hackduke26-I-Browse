@@ -3,6 +3,13 @@ import TalkToPage from "./TalkToPage";
 
 const BACKEND_URL = "http://localhost:8000";
 
+const AUTH0_CONFIG = {
+  configured: true,
+  domain: "dev-s4yv3booagbzwt4s.us.auth0.com",
+  clientId: "U5jWCgrK7lntHku1N6qQbGZOB3Q1BZsZ",
+  audience: "https://ibrowse-api.",
+};
+
 const PRESETS = {
   Reader: {
     icon: "📖",
@@ -192,14 +199,7 @@ export default function App() {
     setStatus("");
 
     try {
-      const config = await fetchAuthConfig();
-      if (!config.configured) {
-        throw new Error(
-          "Backend Auth0 config is incomplete. Add AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE.",
-        );
-      }
-
-      const response = await sendRuntimeMessage({ type: "auth:login", config });
+      const response = await sendRuntimeMessage({ type: "auth:login", config: AUTH0_CONFIG });
       setSession(response.session || null);
       setStatus(
         `Signed in as ${response.session?.user?.email || response.session?.user?.name || "user"}`,
@@ -236,7 +236,7 @@ export default function App() {
     setError("");
 
     try {
-      const authSession = await requireSession();
+      const authSession = session;
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -259,7 +259,7 @@ export default function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authSession.accessToken}`,
+          ...(authSession?.accessToken ? { Authorization: `Bearer ${authSession.accessToken}` } : {}),
         },
         body: JSON.stringify({ prompt: prompt.trim(), snapshot }),
       });
@@ -292,7 +292,6 @@ export default function App() {
     setLog("");
 
     try {
-      await requireSession();
       const preset = PRESETS[name];
       const [tab] = await chrome.tabs.query({
         active: true,
