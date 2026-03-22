@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from "react";
 import TalkToPage from "./TalkToPage";
 
-const BACKEND_URL = "http://localhost:8000";
-
-const AUTH0_CONFIG = {
-  configured: true,
-  domain: "dev-s4yv3booagbzwt4s.us.auth0.com",
-  clientId: "U5jWCgrK7lntHku1N6qQbGZOB3Q1BZsZ",
-  audience: "https://ibrowse-api.",
-};
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
 const PRESETS = [
   // Instant CSS
@@ -728,7 +722,17 @@ export default function App() {
     setStatus("");
 
     try {
-      const response = await sendRuntimeMessage({ type: "auth:login", config: AUTH0_CONFIG });
+      const config = await fetchAuthConfig();
+      if (!config.configured) {
+        throw new Error(
+          "Backend Auth0 config is incomplete. Add AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE.",
+        );
+      }
+
+      const response = await sendRuntimeMessage({
+        type: "auth:login",
+        config,
+      });
       setSession(response.session || null);
       setStatus(
         `Signed in as ${response.session?.user?.email || response.session?.user?.name || "user"}`,
@@ -813,7 +817,7 @@ export default function App() {
       }
 
       setStatus(`Calling AI (${pageText.length} chars)...`);
-      const res = await fetch("http://localhost:8000/preset", {
+      const res = await fetch(`${BACKEND_URL}/preset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preset_id: presetId, pageText, pageHTML, choice }),
@@ -1263,7 +1267,7 @@ export default function App() {
           </div>
         )}
 
-        <TalkToPage />
+        <TalkToPage accessToken={session?.accessToken || ""} />
       </div>
     </>
   );

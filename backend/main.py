@@ -40,6 +40,8 @@ JWKS_CLIENT = (
     if AUTH0_DOMAIN
     else None
 )
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or ""
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID") or ""
 
 SYSTEM_PROMPT = """You are a DOM transformation engine for a browser extension.
 Respond with ONLY a valid JSON object — no explanation, no markdown, no code fences:
@@ -119,7 +121,10 @@ async def auth_config():
 
 
 @app.post("/transform")
-async def transform(req: TransformRequest, claims: dict[str, Any] = Depends(lambda authorization=Header(default=None): require_access_token(authorization) if authorization else {})):
+async def transform(
+    req: TransformRequest,
+    claims: dict[str, Any] = Depends(require_access_token),
+):
     snapshot_text = build_snapshot_text(req.snapshot)
     user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
 
@@ -163,11 +168,6 @@ async def transform(req: TransformRequest, claims: dict[str, Any] = Depends(lamb
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-ELEVENLABS_API_KEY = "sk_ce781fbefe729976f84005e9b25c534e65081973bd176b39"
-ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
-
-
 class ChatRequest(BaseModel):
     message: str
     page_context: str = ""
@@ -202,6 +202,12 @@ Page content:
 
 @app.post("/tts")
 async def tts(req: TTSRequest):
+    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
+        raise HTTPException(
+            status_code=500,
+            detail="ElevenLabs is not configured on the backend",
+        )
+
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     async with httpx.AsyncClient(timeout=30) as http_client:
         r = await http_client.post(

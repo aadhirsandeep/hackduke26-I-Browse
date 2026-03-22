@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-const ELEVENLABS_API_KEY = "sk_ce781fbefe729976f84005e9b25c534e65081973bd176b39";
-const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"; // ElevenLabs "George" voice
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+
+function authHeaders(accessToken) {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
 
 async function getPageText() {
   try {
@@ -35,12 +39,15 @@ async function applyOps(ops) {
   } catch {}
 }
 
-async function handleVoiceCommand(message, pageContext) {
+async function handleVoiceCommand(message, pageContext, accessToken) {
   console.log("[TalkToPage] handleVoiceCommand start, fetching classify...");
   // First ask Gemini to classify: is this a page transform or a question?
-  const classifyRes = await fetch("http://localhost:8000/chat", {
+  const classifyRes = await fetch(`${BACKEND_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(accessToken),
+    },
     body: JSON.stringify({
       message: `Classify this user command as either "transform" (modify/change/remove/hide/add something on the page) or "question" (asking for info/explanation). Reply with only one word: transform or question.\n\nCommand: "${message}"`,
       page_context: "",
@@ -54,9 +61,12 @@ async function handleVoiceCommand(message, pageContext) {
     const snapshot = await getSnapshot();
     if (!snapshot) throw new Error("Could not read the page. Try refreshing.");
 
-    const transformRes = await fetch("http://localhost:8000/transform", {
+    const transformRes = await fetch(`${BACKEND_URL}/transform`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(accessToken),
+      },
       body: JSON.stringify({ prompt: message, snapshot }),
     });
     if (!transformRes.ok) throw new Error(`Transform error ${transformRes.status}`);
@@ -68,9 +78,12 @@ async function handleVoiceCommand(message, pageContext) {
   }
 
   // Otherwise answer as a question
-  const res = await fetch("http://localhost:8000/chat", {
+  const res = await fetch(`${BACKEND_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(accessToken),
+    },
     body: JSON.stringify({ message, page_context: pageContext }),
   });
   if (!res.ok) throw new Error(`Backend error ${res.status}`);
@@ -79,7 +92,7 @@ async function handleVoiceCommand(message, pageContext) {
 }
 
 async function speakWithElevenLabs(text) {
-  const res = await fetch("http://localhost:8000/tts", {
+  const res = await fetch(`${BACKEND_URL}/tts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -96,7 +109,7 @@ async function speakWithElevenLabs(text) {
   URL.revokeObjectURL(url);
 }
 
-export default function TalkToPage() {
+export default function TalkToPage({ accessToken }) {
   const [status, setStatus] = useState("idle"); // idle | listening | thinking | speaking
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
@@ -143,7 +156,7 @@ export default function TalkToPage() {
 
       try {
         const reply = await Promise.race([
-          handleVoiceCommand(transcript, pageContextRef.current),
+          handleVoiceCommand(transcript, pageContextRef.current, accessToken),
           new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out — backend may be down")), 40000)),
         ]);
         addMessage("ai", reply);
