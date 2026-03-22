@@ -96,8 +96,13 @@
       .transform-btn {
         position: relative;
         overflow: hidden;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         width: 100%;
         padding: 13px 20px;
+        min-height: 46px;
         background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
         background-size: 200% auto;
         color: #fff;
@@ -106,8 +111,10 @@
         cursor: pointer;
         font-weight: 600;
         font-size: 15px;
+        line-height: 1.2;
         font-family: 'Space Grotesk', sans-serif;
         letter-spacing: 0.3px;
+        white-space: nowrap;
         transition: background-position 0.4s ease, box-shadow 0.2s ease, transform 0.1s ease;
         box-shadow: 0 4px 24px rgba(99,102,241,0.3);
       }
@@ -231,11 +238,23 @@
         position: relative;
         z-index: 1;
         animation: fade-up 0.4s ease forwards;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      .app-container::-webkit-scrollbar { width: 6px; }
+      .app-container::-webkit-scrollbar-track { background: transparent; }
+      .app-container::-webkit-scrollbar-thumb {
+        background: rgba(148,163,184,0.45);
+        border-radius: 999px;
+      }
+      .app-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(148,163,184,0.7);
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-D2Nwqcsd.js"></script>
+    <script type="module" crossorigin src="./assets/index-COHnIRhk.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>
