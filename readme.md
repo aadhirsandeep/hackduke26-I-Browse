@@ -1,6 +1,6 @@
 # I Browse
 
-A Chrome extension that lets users transform any webpage using natural language instructions, powered by Google Gemini.
+A Chrome extension that lets users transform any webpage using natural language instructions, powered by Google Gemini and gated by Auth0 sign-in.
 
 ## What it does
 
@@ -26,11 +26,12 @@ backend/ (Python)
 
 1. User types a prompt in the side panel
 2. Side panel sends `getSnapshot` to the content script — returns the top 300 meaningful DOM elements (tag, id, class, aria-label, href, text)
-3. Side panel POSTs `{ prompt, snapshot }` to `http://localhost:8000/transform`
-4. FastAPI sends the prompt + snapshot to Gemini (`gemini-flash-latest`) and gets back a structured JSON instruction object
-5. Side panel sends `{ type: "applyOps", ops }` to the content script
-6. Content script executes ops in order: **restyle → inject → hide → remove**
-7. Changed elements flash green (added/restyled) or red (hidden/removed) as visual diff feedback
+3. If needed, the side panel asks Auth0 to log the user in through Universal Login
+4. Side panel POSTs `{ prompt, snapshot }` to `http://localhost:8000/transform` with an Auth0 bearer token
+5. FastAPI validates the Auth0 access token, sends the prompt + snapshot to Gemini (`gemini-flash-latest`), and gets back a structured JSON instruction object
+6. Side panel sends `{ type: "applyOps", ops }` to the content script
+7. Content script executes ops in order: **restyle → inject → hide → remove**
+8. Changed elements flash green (added/restyled) or red (hidden/removed) as visual diff feedback
 
 ## DOM Instruction Schema
 
@@ -76,8 +77,26 @@ Four one-click presets that apply hardcoded ops with no API call:
 cd backend
 pip install -r requirements.txt
 $env:GEMINI_API_KEY="your_key_here"
+$env:AUTH0_DOMAIN="your-tenant.us.auth0.com"
+$env:AUTH0_CLIENT_ID="your_auth0_spa_or_native_client_id"
+$env:AUTH0_AUDIENCE="https://ibrowse-api"
 uvicorn main:app --reload --port 8000
 ```
+
+You can also copy `backend/.env.example` to `backend/.env` and fill the values there.
+
+### Auth0 Setup Notes
+
+Use your existing Auth0 tenant, but configure it for this architecture instead of the Flask quickstart:
+
+1. Create or reuse an Auth0 application for the Chrome extension login flow.
+2. In that Auth0 application, add these Allowed Callback URLs:
+   - `https://<your-extension-id>.chromiumapp.org/auth0`
+   - `https://<your-extension-id>.chromiumapp.org/auth0-logout`
+3. Add the same logout URL to Allowed Logout URLs.
+4. Create or reuse an Auth0 API with an identifier such as `https://ibrowse-api`.
+5. Set `AUTH0_AUDIENCE` in the backend to exactly that API identifier.
+6. Enable the connections you want in Universal Login, such as Google, GitHub, and Username-Password-Authentication.
 
 ### Side Panel (build)
 
@@ -99,6 +118,7 @@ npm run build
 
 - The content script runs in the page context and communicates with the side panel via `chrome.tabs.sendMessage`
 - The side panel is a Chrome side panel (not a popup) — it persists across navigation
+- The extension now requires an Auth0 session before presets or prompts are usable
 - Presets apply ops directly without hitting the backend
 - `restyle` ops inject a `<style>` tag — they stack and are not reversible without a page reload
 - The snapshot deliberately skips pure container divs to keep token usage low

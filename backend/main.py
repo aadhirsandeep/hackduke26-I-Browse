@@ -1,11 +1,17 @@
 import os
 import json
-from fastapi import FastAPI, HTTPException
+from typing import Any
+
+import jwt
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Any
 from google import genai
 from google.genai import types
+from jwt import InvalidTokenError, PyJWKClient
+
+load_dotenv()
 
 app = FastAPI(title="I Browse backend")
 
@@ -18,6 +24,16 @@ app.add_middleware(
 )
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+AUTH0_DOMAIN = (os.environ.get("AUTH0_DOMAIN") or "").replace("https://", "").rstrip("/")
+AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE") or ""
+AUTH0_CLIENT_ID = os.environ.get("AUTH0_CLIENT_ID") or ""
+AUTH0_ISSUER = f"https://{AUTH0_DOMAIN}/" if AUTH0_DOMAIN else ""
+JWKS_CLIENT = (
+    PyJWKClient(f"{AUTH0_ISSUER}.well-known/jwks.json")
+    if AUTH0_DOMAIN
+    else None
+)
 
 SYSTEM_PROMPT = """You are a DOM transformation engine for a browser extension.
 Respond with ONLY a valid JSON object — no explanation, no markdown, no code fences:
@@ -62,8 +78,42 @@ def build_snapshot_text(snapshot: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def require_access_token(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if not AUTH0_DOMAIN or not AUTH0_AUDIENCE:
+        raise HTTPException(status_code=500, detail="Auth0 API is not configured on the backend")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    try:
+        signing_key = JWKS_CLIENT.get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=AUTH0_AUDIENCE,
+            issuer=AUTH0_ISSUER,
+        )
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="Invalid access token") from exc
+
+
+@app.get("/auth/config")
+async def auth_config():
+    return {
+        "configured": bool(AUTH0_DOMAIN and AUTH0_CLIENT_ID and AUTH0_AUDIENCE),
+        "domain": AUTH0_DOMAIN,
+        "clientId": AUTH0_CLIENT_ID,
+        "audience": AUTH0_AUDIENCE,
+    }
+
+
 @app.post("/transform")
-async def transform(req: TransformRequest):
+async def transform(req: TransformRequest, claims: dict[str, Any] = Depends(require_access_token)):
     snapshot_text = build_snapshot_text(req.snapshot)
     user_message = f"Instruction: {req.prompt}\n\nSnapshot:\n{snapshot_text}"
 
@@ -96,6 +146,7 @@ async def transform(req: TransformRequest):
         ops.setdefault("hide", [])
         ops.setdefault("restyle", {})
         ops.setdefault("inject", [])
+        ops["requestedBy"] = claims.get("sub", "")
 
         return ops
 
