@@ -49,6 +49,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "getPageText") {
+    const text = (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 8000);
+    sendResponse({ text });
+    return true;
+  }
+
   if (message.type === "getSnapshot") {
     console.debug("I Browse content script: getSnapshot received", window.location.href);
     const SELECTORS = [
@@ -109,19 +115,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       document.head.appendChild(styleEl);
     }
 
-    // 2. inject — flash injected elements green after appending
+    // 2. inject — properly execute scripts
     if (Array.isArray(ops.inject)) {
       for (const item of ops.inject) {
-        if (item.payload) {
-          const wrapper = document.createElement("div");
-          wrapper.innerHTML = item.payload;
-          const target = item.location === "head" ? document.head : document.body;
-          const children = [...wrapper.children];
-          while (wrapper.firstChild) target.appendChild(wrapper.firstChild);
-          // Flash each injected root element green
-          children.forEach((child) => {
-            if (child.isConnected) flashElement(child, "green");
-          });
+        const html = item.payload || item.html;
+        if (html) {
+          const template = document.createElement("template");
+          template.innerHTML = html;
+          const nodes = [...template.content.childNodes];
+
+          function appendNode(node, target, prepend) {
+            if (node.nodeName === "SCRIPT") {
+              const s = document.createElement("script");
+              if (node.src) s.src = node.src;
+              else s.textContent = node.textContent;
+              [...node.attributes].forEach(a => { if (a.name !== "src") s.setAttribute(a.name, a.value); });
+              if (prepend) target.insertBefore(s, target.firstChild);
+              else target.appendChild(s);
+            } else {
+              const clone = document.importNode(node, true);
+              if (prepend) target.insertBefore(clone, target.firstChild);
+              else target.appendChild(clone);
+              if (clone.nodeType === 1) flashElement(clone, "green");
+            }
+          }
+
+          if (item.location === "head") {
+            nodes.forEach(n => appendNode(n, document.head, false));
+          } else if (item.location === "body-start") {
+            [...nodes].reverse().forEach(n => appendNode(n, document.body, true));
+          } else {
+            nodes.forEach(n => appendNode(n, document.body, false));
+          }
         } else {
           const el = document.createElement(item.tag || "div");
           if (item.id) el.id = item.id;
@@ -164,6 +189,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     sendResponse({ status: "applied" });
+    return true;
+  }
+
+  if (message.type === "removePreset") {
+    const ids = message.ids || [];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+    // Stop audio if removing soundtrack
+    if (ids.includes("ibrowse-audio-ctrl") && window.__ibrowseAudio) {
+      try { window.__ibrowseAudio.close(); delete window.__ibrowseAudio; } catch(e) {}
+    }
+    // Restore padding-top if removing worldbuilder
+    if (ids.includes("ibrowse-worldbuilder")) {
+      document.body.style.removeProperty("padding-top");
+      const st = document.querySelector("style[data-ibrowse-padding]");
+      if (st) st.remove();
+    }
+    sendResponse({ status: "removed" });
     return true;
   }
 });

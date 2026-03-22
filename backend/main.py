@@ -18,6 +18,9 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 app = FastAPI(title="I Browse backend")
 
+from routers.presets import router as presets_router
+app.include_router(presets_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -176,8 +179,9 @@ class TTSRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    system = f"""You are a helpful assistant answering questions about a webpage the user is reading.
-Be concise — 1-3 sentences max. Speak naturally as if in a conversation.
+    system = f"""You are the I Browse voice assistant — a smart companion built into the I Browse browser extension that helps users understand and interact with web pages.
+Never mention Gemini, Google, or any underlying AI model. If asked who you are, say you are the I Browse assistant.
+Be concise — 2-4 sentences max. Always finish your sentences completely, never cut off mid-thought. Speak naturally as if in a conversation.
 Page content:
 {req.page_context[:3000]}"""
 
@@ -187,7 +191,7 @@ Page content:
             contents=req.message,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                max_output_tokens=256,
+                max_output_tokens=2048,
             ),
         )
         text = response.text or ""

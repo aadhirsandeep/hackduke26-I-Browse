@@ -15,7 +15,59 @@ async function getPageText() {
   } catch { return ""; }
 }
 
-async function askGemini(message, pageContext) {
+async function getSnapshot() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return null;
+    const res = await Promise.race([
+      chrome.tabs.sendMessage(tab.id, { type: "getSnapshot" }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 2000)),
+    ]);
+    return res?.snapshot || null;
+  } catch { return null; }
+}
+
+async function applyOps(ops) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await chrome.tabs.sendMessage(tab.id, { type: "applyOps", ops });
+  } catch {}
+}
+
+async function handleVoiceCommand(message, pageContext) {
+  console.log("[TalkToPage] handleVoiceCommand start, fetching classify...");
+  // First ask Gemini to classify: is this a page transform or a question?
+  const classifyRes = await fetch("http://localhost:8000/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `Classify this user command as either "transform" (modify/change/remove/hide/add something on the page) or "question" (asking for info/explanation). Reply with only one word: transform or question.\n\nCommand: "${message}"`,
+      page_context: "",
+    }),
+  });
+  if (!classifyRes.ok) throw new Error(`Backend error ${classifyRes.status}`);
+  const { reply: classification } = await classifyRes.json();
+  const isTransform = classification.toLowerCase().includes("transform");
+
+  if (isTransform) {
+    const snapshot = await getSnapshot();
+    if (!snapshot) throw new Error("Could not read the page. Try refreshing.");
+
+    const transformRes = await fetch("http://localhost:8000/transform", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: message, snapshot }),
+    });
+    if (!transformRes.ok) throw new Error(`Transform error ${transformRes.status}`);
+    const ops = await transformRes.json();
+    await applyOps(ops);
+
+    const affected = (ops.hide?.length || 0) + (ops.remove?.length || 0) + (ops.restyle ? Object.keys(ops.restyle).length : 0) + (ops.inject?.length || 0);
+    return affected > 0 ? `Done! I've applied your changes to the page.` : "I tried but couldn't find matching elements on this page.";
+  }
+
+  // Otherwise answer as a question
   const res = await fetch("http://localhost:8000/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -61,9 +113,10 @@ export default function TalkToPage() {
     setMessages((p) => [...p, { id: Date.now() + Math.random(), source, text }]);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
+    try { recognitionRef.current?.stop(); } catch {}
     recognitionRef.current = null;
     setStatus("idle");
+    setError("");
   }, []);
 
   const startListening = useCallback(async () => {
@@ -89,7 +142,10 @@ export default function TalkToPage() {
       setStatus("thinking");
 
       try {
-        const reply = await askGemini(transcript, pageContextRef.current);
+        const reply = await Promise.race([
+          handleVoiceCommand(transcript, pageContextRef.current),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out — backend may be down")), 40000)),
+        ]);
         addMessage("ai", reply);
         setStatus("speaking");
         await speakWithElevenLabs(reply);
@@ -115,9 +171,9 @@ export default function TalkToPage() {
   }, []);
 
   const handleToggle = useCallback(() => {
-    if (isActive) { stopListening(); return; }
+    if (status !== "idle") { stopListening(); return; }
     startListening();
-  }, [isActive, startListening, stopListening]);
+  }, [status, startListening, stopListening]);
 
   const statusLabel = { idle: "Click to speak", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…" }[status];
   const statusColor = { idle: "#475569", listening: "#67e8f9", thinking: "#a5b4fc", speaking: "#c4b5fd" }[status];
@@ -132,12 +188,11 @@ export default function TalkToPage() {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
         <button
           onClick={handleToggle}
-          disabled={status === "thinking" || status === "speaking"}
           style={{
             width: "64px", height: "64px", borderRadius: "50%",
             border: isActive ? `2px solid ${statusColor}` : "2px solid rgba(103,232,249,0.2)",
             background: isActive ? `${statusColor}18` : "rgba(255,255,255,0.04)",
-            cursor: (status === "thinking" || status === "speaking") ? "not-allowed" : "pointer",
+            cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             transition: "all 0.25s ease",
             boxShadow: status === "listening" ? `0 0 28px ${statusColor}66` : isActive ? `0 0 16px ${statusColor}44` : "none",
